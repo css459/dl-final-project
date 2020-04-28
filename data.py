@@ -3,13 +3,17 @@ import random
 import numpy as np
 import torch
 import torchvision
+from PIL import Image, ImageDraw
 
 from helpers.data_helper import UnlabeledDataset, LabeledDataset
 from helpers.helper import collate_fn
 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
+
+def set_seeds(s=42):
+    random.seed(s)
+    np.random.seed(s)
+    torch.manual_seed(s)
+
 
 image_folder = '../data'
 annotation_csv = '../data/annotation.csv'
@@ -57,3 +61,49 @@ def get_labeled_set(batch_size=3):
                                                       collate_fn=collate_fn)
 
     return labeled_trainset, labeled_trainloader
+
+
+def make_bounding_box_images(batch):
+    return torch.stack([_make_bounding_box_img_helper(b)
+                        for b in batch])
+
+
+def _make_bounding_box_img_helper(sample):
+    boxes = []
+    categories = []
+
+    b_boxes = sample['bounding_box']
+    cat = sample['category']
+
+    # Iterate over boxes
+    for i in range(len(b_boxes)):
+        b = b_boxes[i]
+        b = b.T * 10
+        b[:, 1] *= -1
+        b += + 400
+        b = [tuple(x) for x in b.numpy()]
+        b[-2], b[-1] = b[-1], b[-2]
+        c = cat[i].item() + 1
+        boxes.append(b)
+        categories.append(c)
+
+    # Build image
+    channels = []
+    for c in range(1, 10):
+        canvas = Image.new('1', (800, 800))
+        context = ImageDraw.Draw(canvas)
+        boxes_idx = [i for i in range(len(categories)) if categories[i] == c]
+        for i in boxes_idx:
+            context.polygon(boxes[i], fill=1)
+        channels.append(np.array(canvas).astype(float))
+
+    # Background mask
+    mask = np.logical_not(np.sum(np.array(channels), 0, dtype=np.float))
+    channels = np.array([mask] + channels)
+
+    return torch.from_numpy(channels)
+
+
+def tensor_to_image(x, channel=0):
+    c = x[channel]
+    return Image.fromarray(c.numpy().astype('bool')).convert('1')
