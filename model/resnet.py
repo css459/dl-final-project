@@ -1,4 +1,5 @@
 import os
+
 import torch
 from torch import nn
 from torchvision.models.resnet import resnet18
@@ -12,12 +13,9 @@ MODES = ['single-image',
 
 
 class Prototype(nn.Module):
-    def __init__(self, hidden_dim=1024, image_channels=3, mode='single-image'):
+    def __init__(self, hidden_dim=1024, image_channels=3):
         super().__init__()
 
-        assert mode in MODES
-
-        self.mode = mode
         self.hidden_dim = hidden_dim
         self.input_image_channels = image_channels
 
@@ -62,26 +60,90 @@ class Prototype(nn.Module):
         )
 
         # Bounding-box-image reconstruction
-        # Output size --> 10x400x400 (Upsampled to 10x800x800)
-        # TODO
+        # Output size --> 10x400x400 (Interpolated to 10x800x800)
+        #
+        # INPUT: (batch size, 6144, 1, 1)
+        # Let dim = 6144:
+        #   Downscale dim by factor of 4 --> 4 Times
+        #   Then, downscale dim by factor of 2 --> 1 Time
+        #   Them downscale two dimensions for a final dim of 10
+        #
+        # OUTPUT: (batch size, 10, 400, 400)
+        #          --> Call UpSample(2,2)
+        #          --> (batch size, 10, 800, 800)
+        self.object_map_reconstructor = nn.Sequential(
+            UnFlatten(input_size=6144),
 
-    def single_image_forward(self, x):
+            Interpolate(scale_factor=(4, 4), mode='bilinear'),
+            nn.Conv2d(hidden_dim * 6, 1536, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(1536),
+            nn.ReLU(),
+
+            Interpolate(scale_factor=(4, 4), mode='bilinear'),
+            nn.Conv2d(1536, 384, kernel_size=5, stride=1, padding=1),
+            nn.BatchNorm2d(384),
+            nn.ReLU(),
+
+            Interpolate(scale_factor=(4, 4), mode='bilinear'),
+            nn.Conv2d(384, 96, kernel_size=7, stride=1, padding=1),
+            nn.BatchNorm2d(96),
+            nn.ReLU(),
+
+            Interpolate(scale_factor=(4, 4), mode='bilinear'),
+            nn.Conv2d(96, 24, kernel_size=7, stride=1, padding=1),
+            nn.BatchNorm2d(24),
+            nn.ReLU(),
+
+            Interpolate(scale_factor=(2, 2), mode='bilinear'),
+            nn.Conv2d(24, 12, kernel_size=7, stride=1, padding=1),
+            nn.BatchNorm2d(12),
+            nn.ReLU(),
+
+            nn.Conv2d(12, 10, kernel_size=7, stride=1, padding=1),
+            Interpolate(scale_factor=(2, 2), mode='bilinear'),
+        )
+
+    def backbone_encode(self, x):
         x = self.backbone(x)
         x = x.view(x.size(0), -1)
         x = self.fc_translation_layer(x)
+        return x
+
+    def single_image_forward(self, x):
+        x = self.backbone_encode(x)
         x = self.single_image_reconstructor(x)
         return x
 
-    def forward(self, x):
-        if self.mode == 'single-image':
+    def object_map_forward(self, x):
+        # Encode all 6 images along the
+        # second dimension
+        acc = self.backbone_encode(x[0])
+        for i in x[1:]:
+            enc = self.backbone_encode(i)
+            acc = torch.cat((acc, enc), 1)
+
+        acc = self.object_map_reconstructor(acc)
+        return acc
+
+    def forward(self, x, mode='single-image'):
+        assert mode in MODES
+
+        if mode == 'single-image':
             return self.single_image_forward(x)
 
-    def save(self, epoch_num=None, save_dir='resnet_weights'):
+        if mode == 'object-map':
+            return self.object_map_forward(x)
+
+    def save(self, epoch_num=None, file_prefix='', save_dir='./resnet_weights'):
         if epoch_num is None:
             epoch_num = 'latest'
         else:
             epoch_num = str(epoch_num) + '-epochs'
-        full = os.path.join(save_dir, 'resnet-' + epoch_num + '.torch')
-        backbone = os.path.join(save_dir, 'backbone-' + epoch_num + '.torch')
+
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+        full = os.path.join(save_dir, file_prefix + 'resnet-' + epoch_num + '.torch')
+        backbone = os.path.join(save_dir, file_prefix + 'backbone-' + epoch_num + '.torch')
         torch.save(self.state_dict(), full)
         torch.save(self.backbone.state_dict(), backbone)

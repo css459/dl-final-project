@@ -70,8 +70,11 @@ def get_labeled_set(batch_size=3, validation=None, extra_info=False):
         return labeled_train_set, labeled_train_loader
 
     else:
-        validation_idx = int(LABELED_SCENE_INDEX[-1] * validation) - LABELED_SCENE_INDEX[-1]
+        labeled_sample_size = LABELED_SCENE_INDEX[-1] - LABELED_SCENE_INDEX[0]
+        validation_idx = LABELED_SCENE_INDEX[-1] - int(labeled_sample_size * validation)
         assert validation_idx > LABELED_SCENE_INDEX[0]
+
+        print('Validation Index:', validation_idx)
 
         train_scene_idx = np.arange(LABELED_SCENE_INDEX[0], validation_idx)
         test_scene_idx = np.arange(validation_idx, LABELED_SCENE_INDEX[-1])
@@ -144,6 +147,6 @@ def _make_bounding_box_img_helper(sample):
     return torch.from_numpy(channels)
 
 
-def tensor_to_image(x, channel=0):
+def tensor_to_image(x, channel=0, astype='bool'):
     c = x[channel]
-    return Image.fromarray(c.numpy().astype('bool')).convert('1')
+    return Image.fromarray(c.numpy().astype(astype)).convert('1')
