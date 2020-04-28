@@ -103,7 +103,7 @@ def get_labeled_set(batch_size=3, validation=None, extra_info=False):
                                          num_workers=2,
                                          collate_fn=collate_fn)
 
-        return (labeled_train_set, labeled_train_loader), (labeled_test_set, labeled_train_loader)
+        return (labeled_train_set, labeled_train_loader), (labeled_test_set, labeled_test_loader)
 
 
 def make_bounding_box_images(batch):
