@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torchvision
 from PIL import Image, ImageDraw
+from torch.utils.data import DataLoader
 
 from helpers.data_helper import UnlabeledDataset, LabeledDataset
 from helpers.helper import collate_fn
@@ -15,16 +16,24 @@ def set_seeds(s=42):
     torch.manual_seed(s)
 
 
-image_folder = '../data'
-annotation_csv = '../data/annotation.csv'
+#
+# Data Constants
+#
+
+IMAGE_FOLDER = '../data'
+ANNOTATION_CSV = '../data/annotation.csv'
 
 # You shouldn't change the unlabeled_scene_index
 # The first 106 scenes are unlabeled
-unlabeled_scene_index = np.arange(106)
+UNLABELED_SCENE_INDEX = np.arange(106)
 
 # The scenes from 106 - 133 are labeled
-# You should devide the labeled_scene_index into two subsets (training and validation)
-labeled_scene_index = np.arange(106, 134)
+# You should divide the labeled_scene_index into two subsets (training and validation)
+LABELED_SCENE_INDEX = np.arange(106, 134)
+
+#
+# PyTorch Data Transformers
+#
 
 transform = torchvision.transforms.ToTensor()
 
@@ -32,35 +41,66 @@ transform = torchvision.transforms.ToTensor()
 def get_unlabeled_set(batch_size=3, format='image'):
     assert format in ['image', 'sample']
 
-    unlabeled_trainset = UnlabeledDataset(image_folder=image_folder,
-                                          scene_index=unlabeled_scene_index,
+    unlabeled_trainset = UnlabeledDataset(image_folder=IMAGE_FOLDER,
+                                          scene_index=UNLABELED_SCENE_INDEX,
                                           first_dim='image',
                                           transform=transform)
 
-    unlabeled_trainloader = torch.utils.data.DataLoader(unlabeled_trainset,
-                                                        batch_size=batch_size,
-                                                        shuffle=True,
-                                                        num_workers=2)
+    unlabeled_trainloader = DataLoader(unlabeled_trainset,
+                                       batch_size=batch_size,
+                                       shuffle=True,
+                                       num_workers=2)
+
     return unlabeled_trainset, unlabeled_trainloader
 
 
-def get_labeled_set(batch_size=3):
-    # The labeled dataset can only be retrieved by sample.
-    # And all the returned data are tuple of tensors, since bounding boxes may have different size
-    # You can choose whether the loader returns the extra_info. It is optional. You don't have to use it.
-    labeled_trainset = LabeledDataset(image_folder=image_folder,
-                                      annotation_file=annotation_csv,
-                                      scene_index=labeled_scene_index,
-                                      transform=transform,
-                                      extra_info=False)
+def get_labeled_set(batch_size=3, validation=None, extra_info=False):
+    if not validation:
+        labeled_train_set = LabeledDataset(image_folder=IMAGE_FOLDER,
+                                           annotation_file=ANNOTATION_CSV,
+                                           scene_index=LABELED_SCENE_INDEX,
+                                           transform=transform,
+                                           extra_info=extra_info)
 
-    labeled_trainloader = torch.utils.data.DataLoader(labeled_trainset,
-                                                      batch_size=batch_size,
-                                                      shuffle=True,
-                                                      num_workers=2,
-                                                      collate_fn=collate_fn)
+        labeled_train_loader = DataLoader(labeled_train_set,
+                                          batch_size=batch_size,
+                                          shuffle=True,
+                                          num_workers=2,
+                                          collate_fn=collate_fn)
+        return labeled_train_set, labeled_train_loader
 
-    return labeled_trainset, labeled_trainloader
+    else:
+        validation_idx = int(LABELED_SCENE_INDEX[-1] * validation) - LABELED_SCENE_INDEX[-1]
+        assert validation_idx > LABELED_SCENE_INDEX[0]
+
+        train_scene_idx = np.arange(LABELED_SCENE_INDEX[0], validation_idx)
+        test_scene_idx = np.arange(validation_idx, LABELED_SCENE_INDEX[-1])
+
+        labeled_train_set = LabeledDataset(image_folder=IMAGE_FOLDER,
+                                           annotation_file=ANNOTATION_CSV,
+                                           scene_index=train_scene_idx,
+                                           transform=transform,
+                                           extra_info=extra_info)
+
+        labeled_train_loader = DataLoader(labeled_train_set,
+                                          batch_size=batch_size,
+                                          shuffle=True,
+                                          num_workers=2,
+                                          collate_fn=collate_fn)
+
+        labeled_test_set = LabeledDataset(image_folder=IMAGE_FOLDER,
+                                          annotation_file=ANNOTATION_CSV,
+                                          scene_index=test_scene_idx,
+                                          transform=transform,
+                                          extra_info=extra_info)
+
+        labeled_test_loader = DataLoader(labeled_test_set,
+                                         batch_size=batch_size,
+                                         shuffle=True,
+                                         num_workers=2,
+                                         collate_fn=collate_fn)
+
+        return (labeled_train_set, labeled_train_loader), (labeled_test_set, labeled_train_loader)
 
 
 def make_bounding_box_images(batch):
