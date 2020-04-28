@@ -134,7 +134,8 @@ class Prototype(nn.Module):
         if mode == 'object-map':
             return self.object_map_forward(x)
 
-    def save(self, epoch_num=None, file_prefix='', save_dir='./resnet_weights'):
+    @staticmethod
+    def save(model, using_dataparallel=True, epoch_num=None, file_prefix='', save_dir='./resnet_weights'):
         if epoch_num is None:
             epoch_num = 'latest'
         else:
@@ -145,5 +146,9 @@ class Prototype(nn.Module):
 
         full = os.path.join(save_dir, file_prefix + 'resnet-' + epoch_num + '.torch')
         backbone = os.path.join(save_dir, file_prefix + 'backbone-' + epoch_num + '.torch')
-        torch.save(self.state_dict(), full)
-        torch.save(self.backbone.state_dict(), backbone)
+        if using_dataparallel:
+            torch.save(model.module.state_dict(), full)
+            torch.save(model.module.backbone.state_dict(), backbone)
+        else:
+            torch.save(model.state_dict(), full)
+            torch.save(model.backbone.state_dict(), backbone)
