@@ -2,9 +2,10 @@
 # coding: utf-8
 
 from time import perf_counter
-import torch
-from data import get_unlabeled_set, get_labeled_set, set_seeds, make_bounding_box_images
 
+import torch
+
+from data import get_unlabeled_set, get_labeled_set, set_seeds, make_bounding_box_images
 from model.resnet import Prototype
 
 #
@@ -16,6 +17,9 @@ hidden_size = 1024
 
 unlabeled_epochs = 10
 labeled_epochs = 100
+
+# Loads the Unlabeled-trained model from disk
+skip_unlabeled_training = False
 
 #
 # Setup
@@ -41,6 +45,9 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=batch_size)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = Prototype(hidden_dim=hidden_size)
 
+if skip_unlabeled_training:
+    model.load_state_dict(torch.load('./resnet_weights/unlabeled-resnet-latest.torch'))
+
 if torch.cuda.is_available():
     model = torch.nn.DataParallel(model)
     assert batch_size >= torch.cuda.device_count()
@@ -64,32 +71,33 @@ optimizer = torch.optim.Adam(model.parameters())
 
 model.train()
 
-start_time = perf_counter()
-for epoch in range(unlabeled_epochs):
-    loss = 0.0
+if not skip_unlabeled_training:
+    start_time = perf_counter()
+    for epoch in range(unlabeled_epochs):
+        loss = 0.0
 
-    max_batches = len(unlabeled_trainloader)
-    for idx, (images, camera_index) in enumerate(unlabeled_trainloader):
-        optimizer.zero_grad()
+        max_batches = len(unlabeled_trainloader)
+        for idx, (images, camera_index) in enumerate(unlabeled_trainloader):
+            optimizer.zero_grad()
 
-        images = images.to(device)
-        reconstructions = model(images, mode='single-image')
-        loss = criterion(reconstructions, images)
+            images = images.to(device)
+            reconstructions = model(images, mode='single-image')
+            loss = criterion(reconstructions, images)
 
-        loss.backward()
-        optimizer.step()
+            loss.backward()
+            optimizer.step()
 
-        # Training Wheels
-        # print('loss', loss.item())
-        # break
+            # Training Wheels
+            # print('loss', loss.item())
+            # break
 
-        if idx % 1000 == 0:
-            print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
-                  'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
+            if idx % 1000 == 0:
+                print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
+                      'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
-    Prototype.save(model, file_prefix='unlabeled-')
+        Prototype.save(model, file_prefix='unlabeled-')
 
-print('Unlabeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))
+    print('Unlabeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))
 
 #
 # Labeled Training
@@ -136,4 +144,3 @@ for epoch in range(labeled_epochs):
     Prototype.save(model, file_prefix='labeled-')
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))
-
