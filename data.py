@@ -138,7 +138,7 @@ def _make_bounding_box_img_helper(sample):
         boxes_idx = [i for i in range(len(categories)) if categories[i] == c]
         for i in boxes_idx:
             context.polygon(boxes[i], fill=1)
-        channels.append(np.array(canvas).astype(float))
+        channels.append(np.array(canvas).astype(np.float32))
 
     # Background mask
     mask = np.logical_not(np.sum(np.array(channels), 0, dtype=np.float))

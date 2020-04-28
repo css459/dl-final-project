@@ -14,8 +14,8 @@ from model.resnet import Prototype
 batch_size = 4
 hidden_size = 1024
 
-unlabeled_epochs = 3
-labeled_epochs = 10
+unlabeled_epochs = 1
+labeled_epochs = 1
 
 #
 # Setup
