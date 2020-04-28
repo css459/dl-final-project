@@ -11,11 +11,11 @@ from model.resnet import Prototype
 # Parameters
 #
 
-batch_size = 4
+batch_size = 32
 hidden_size = 1024
 
-unlabeled_epochs = 1
-labeled_epochs = 1
+unlabeled_epochs = 10
+labeled_epochs = 100
 
 #
 # Setup
