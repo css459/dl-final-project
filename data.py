@@ -147,6 +147,8 @@ def _make_bounding_box_img_helper(sample):
     return torch.from_numpy(channels)
 
 
-def tensor_to_image(x, channel=0, astype='bool'):
+def tensor_to_image(x, channel=0, astype='bool', detach=False):
     c = x[channel]
+    if detach:
+        c = c.detach()
     return Image.fromarray(c.numpy().astype(astype)).convert('1')

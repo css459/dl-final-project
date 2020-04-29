@@ -1,6 +1,7 @@
 .idea
 resnet_weights/
 slurm*.out
+*.torch
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

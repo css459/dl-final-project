@@ -115,7 +115,7 @@ class Prototype(nn.Module):
             nn.ReLU(),
 
             nn.Conv2d(12, 10, kernel_size=7, stride=1, padding=1),
-            Interpolate(scale_factor=(2, 2), mode='bilinear'),
+            Interpolate(scale_factor=(2, 2), mode='bilinear')
         )
 
     #
@@ -267,13 +267,33 @@ class Prototype(nn.Module):
 
     # Reconstruction + KL divergence losses summed over all elements and batch
     @staticmethod
-    def var_loss_function(recon_x, x, mu, logvar):
-        BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, reduction='sum')
-
+    def var_loss_function(recon_x, x, mu, logvar, mode, loss_reduction = 'sum'):
+        assert mode in MODES
+        
+        # How the losses are aggregated over the batch
+        assert loss_reduction in ['sum', 'mean']
+        
+        # Apply MSE loss over image pixels
+        if mode == 'single-image':
+            loss_fn = torch.nn.MSELoss(reduction=loss_reduction)
+            loss = loss_fn(recon_x, x)
+            
+        elif mode == 'object-map':
+            # LogSoftmax over the channels to compute probability of
+            # class under pixel for channel
+            lsm = nn.LogSoftmax(dim=1)
+            print(lsm(recon_x).shape)
+            print(x.shape)
+            # TODO: Fix this loss: Pytorch expects target image of one channel not 1-hots
+            loss_fn = torch.nn.NLLLoss(reduction=loss_reduction)
+            loss = loss_fn(lsm(recon_x), x)
+        
+        
+        # BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, reduction='sum')
         # see Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
-        return BCE + KLD, BCE, KLD
+        return loss + kld, loss, kld
