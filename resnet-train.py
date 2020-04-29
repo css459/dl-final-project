@@ -13,6 +13,7 @@ from model.resnet import Prototype
 #
 
 batch_size = 32
+labeled_batch_size = 16
 hidden_size = 1024
 
 unlabeled_epochs = 10
@@ -36,7 +37,7 @@ if torch.cuda.is_available():
 #
 
 _, unlabeled_trainloader = get_unlabeled_set(batch_size=batch_size)
-(_, labeled_trainloader), (_, labeled_testloader) = get_labeled_set(batch_size=batch_size, validation=0.2)
+(_, labeled_trainloader), (_, labeled_testloader) = get_labeled_set(batch_size=labeled_batch_size, validation=0.2)
 
 #
 # Model
@@ -114,7 +115,9 @@ for epoch in range(labeled_epochs):
         optimizer.zero_grad()
 
         # Restack images to be (6-directions, batch size, channels, H, W)
-        images = torch.stack(images).permute(1, 0, 2, 3, 4)
+        # images = torch.stack(images).permute(1, 0, 2, 3, 4)
+
+        images = torch.stack(images)
         images = images.to(device)
 
         # Rasterize bounding box images for reconstruction

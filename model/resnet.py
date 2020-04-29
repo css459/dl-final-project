@@ -115,6 +115,10 @@ class Prototype(nn.Module):
         return x
 
     def object_map_forward(self, x):
+        # Re-stack images to be
+        # (6-directions, batch size, channels, H, W)
+        x = x.permute(1, 0, 2, 3, 4)
+
         # Encode all 6 images along the
         # second dimension
         acc = self.backbone_encode(x[0])
