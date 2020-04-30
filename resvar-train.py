@@ -25,7 +25,7 @@ unlabeled_epochs = 20
 labeled_epochs = 20
 
 # Loads the Unlabeled-trained model from disk
-skip_unlabeled_training = False
+skip_unlabeled_training = True
 
 #
 # Setup
@@ -93,7 +93,7 @@ if not skip_unlabeled_training:
 
             images = images.to(device)
             reconstructions, mu, logvar = model(images, mode='single-image')
-            loss, bce, kld = criterion(reconstructions, images, mu, logvar)
+            loss, bce, kld = criterion(reconstructions, images, mu, logvar, mode='single-image')
 
             loss.backward()
             optimizer.step()
@@ -106,7 +106,7 @@ if not skip_unlabeled_training:
                 print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
                       'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
-        Prototype.save(model, file_prefix='unlabeled-', save_dir=output_path)
+        # Prototype.save(model, file_prefix='unlabeled-', save_dir=output_path)
 
     print('Unlabeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))
 
@@ -138,7 +138,7 @@ for epoch in range(labeled_epochs):
 
         # print('outpt shape:', reconstructions.shape)
 
-        loss, bce, kld = criterion(reconstructions, targets, mu, logvar)
+        loss, bce, kld = criterion(reconstructions, targets, mu, logvar, mode='object-map')
 
         loss.backward()
         optimizer.step()
@@ -151,6 +151,6 @@ for epoch in range(labeled_epochs):
             print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
                   'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
-    Prototype.save(model, file_prefix='labeled-', save_dir=output_path)
+    # Prototype.save(model, file_prefix='labeled-', save_dir=output_path)
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))

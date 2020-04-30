@@ -106,12 +106,12 @@ def get_labeled_set(batch_size=3, validation=None, extra_info=False):
         return (labeled_train_set, labeled_train_loader), (labeled_test_set, labeled_test_loader)
 
 
-def make_bounding_box_images(batch):
-    return torch.stack([_make_bounding_box_img_helper(b)
+def make_bounding_box_images(batch, single_channel=True):
+    return torch.stack([_make_bounding_box_img_helper(b, single_channel=single_channel)
                         for b in batch])
 
 
-def _make_bounding_box_img_helper(sample):
+def _make_bounding_box_img_helper(sample, single_channel):
     boxes = []
     categories = []
 
@@ -143,6 +143,10 @@ def _make_bounding_box_img_helper(sample):
     # Background mask
     mask = np.logical_not(np.sum(np.array(channels), 0, dtype=np.float))
     channels = np.array([mask] + channels)
+
+    if single_channel:
+        channels = np.array([i * channels[i] for i in range(len(channels))]).astype(np.long)
+        channels = np.max(channels, 0)
 
     return torch.from_numpy(channels)
 

@@ -275,19 +275,17 @@ class Prototype(nn.Module):
         
         # Apply MSE loss over image pixels
         if mode == 'single-image':
-            loss_fn = torch.nn.MSELoss(reduction=loss_reduction)
+            loss_fn = nn.MSELoss(reduction=loss_reduction)
             loss = loss_fn(recon_x, x)
             
         elif mode == 'object-map':
             # LogSoftmax over the channels to compute probability of
             # class under pixel for channel
-            lsm = nn.LogSoftmax(dim=1)
-            print(lsm(recon_x).shape)
-            print(x.shape)
-            # TODO: Fix this loss: Pytorch expects target image of one channel not 1-hots
-            loss_fn = torch.nn.NLLLoss(reduction=loss_reduction)
-            loss = loss_fn(lsm(recon_x), x)
-        
+            # lsm = nn.LogSoftmax(dim=1)
+            # loss_fn = nn.NLLLoss(reduction=loss_reduction)
+            # loss = loss_fn(lsm(recon_x), x)
+            loss_fn = nn.CrossEntropyLoss(reduction=loss_reduction)
+            loss = loss_fn(recon_x, x)
         
         # BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, reduction='sum')
         # see Appendix B from VAE paper:
