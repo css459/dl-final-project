@@ -252,6 +252,10 @@ class Prototype(nn.Module):
     # Utility Functions
     #
 
+    def freeze_backbone(self, unfreeze=False):
+        for p in self.backbone.parameters():
+            p.requires_grad = unfreeze
+
     @staticmethod
     def save(model, using_data_parallel=True, epoch_num=None,
              file_prefix='', save_dir='./resnet_weights'):
@@ -274,7 +278,8 @@ class Prototype(nn.Module):
             torch.save(model.state_dict(), full)
             torch.save(model.backbone.state_dict(), backbone)
 
-    def loss_function(self, recon_x, x, mode, mu=None, logvar=None, loss_reduction='sum'):
+    def loss_function(self, recon_x, x, mode, mu=None, logvar=None,
+                      loss_reduction='sum', kld_schedule=0.0002, i=None):
         assert mode in MODES
 
         if (mu is None or logvar is None) and self.is_variational:
@@ -304,7 +309,12 @@ class Prototype(nn.Module):
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
         if self.is_variational:
+
+            # KLD will be scheduled to increase by `kld_schedule` for each `i`
+            # up until 1.0
             kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+            if i and kld_schedule:
+                kld *= min(kld_schedule * i, 1.0)
             return loss + kld, loss, kld
         else:
             return loss

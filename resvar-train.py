@@ -15,9 +15,9 @@ from model.resnet import Prototype
 # The Resnet prototype will use variational
 # representations
 variational = True
-output_path = './resvar_weights/'
+output_path = '/scratch/css459/resvar_weights/'
 
-batch_size = 32
+unlabeled_batch_size = 32
 labeled_batch_size = 16
 hidden_size = 1024
 
@@ -25,7 +25,7 @@ unlabeled_epochs = 10
 labeled_epochs = 10
 
 # Loads the Unlabeled-trained model from disk
-skip_unlabeled_training = False
+skip_unlabeled_training = True
 resume_unlabeled = True
 
 #
@@ -36,13 +36,14 @@ set_seeds()
 torch.backends.cudnn.benchmark = True
 
 if torch.cuda.is_available():
-    batch_size *= torch.cuda.device_count()
+    unlabeled_batch_size *= torch.cuda.device_count()
+    labeled_batch_size *= torch.cuda.device_count()
 
 #
 # Data
 #
 
-_, unlabeled_trainloader = get_unlabeled_set(batch_size=batch_size)
+_, unlabeled_trainloader = get_unlabeled_set(batch_size=unlabeled_batch_size)
 (_, labeled_trainloader), (_, labeled_testloader) = get_labeled_set(batch_size=labeled_batch_size,
                                                                     validation=0.2)
 
@@ -59,13 +60,13 @@ if skip_unlabeled_training or resume_unlabeled:
 
 if torch.cuda.is_available():
     model = torch.nn.DataParallel(model)
-    assert batch_size >= torch.cuda.device_count()
+    assert unlabeled_batch_size >= torch.cuda.device_count()
     print('==> Using Data Parallel Devices:', torch.cuda.device_count())
 
 model = model.to(device)
 
 print('==> Device:', device)
-print('==> Batch Size:', batch_size)
+print('==> Batch Size:', unlabeled_batch_size)
 print('==> Unlabeled Epochs:', unlabeled_epochs)
 print('==> Labeled Epochs:', labeled_epochs)
 print('==> Hidden Encoding Size per Image:', hidden_size)
@@ -79,8 +80,9 @@ criterion = model.module.loss_function
 optimizer = torch.optim.Adam(model.parameters())
 
 model.train()
-
 if not skip_unlabeled_training:
+
+    i = 0
     start_time = perf_counter()
     for epoch in range(unlabeled_epochs):
         loss = 0.0
@@ -94,9 +96,13 @@ if not skip_unlabeled_training:
             loss, bce, kld = criterion(reconstructions, images,
                                        mode='single-image',
                                        mu=mu,
-                                       logvar=logvar)
+                                       logvar=logvar,
+                                       kld_schedule=0.0002,
+                                       i=i)
             loss.backward()
             optimizer.step()
+
+            i += 1
 
             # Training Wheels
             # print('loss', loss.item())
@@ -114,8 +120,10 @@ if not skip_unlabeled_training:
 # Labeled Training
 #
 
-model.train()
+# FREEZE BACKBONE: No more training to the encoder
+model.freeze_backbone()
 
+i = 0
 start_time = perf_counter()
 for epoch in range(labeled_epochs):
     loss = 0.0
@@ -141,9 +149,13 @@ for epoch in range(labeled_epochs):
         loss, bce, kld = criterion(reconstructions, targets,
                                    mode='object-map',
                                    mu=mu,
-                                   logvar=logvar)
+                                   logvar=logvar,
+                                   kld_schedule=0.0002,
+                                   i=i)
         loss.backward()
         optimizer.step()
+
+        i += 1
 
         # Training Wheels
         # print('loss', loss.item())
