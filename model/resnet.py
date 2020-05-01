@@ -254,7 +254,7 @@ class Prototype(nn.Module):
         if mode == 'object-map':
             if self.is_variational:
                 x, mu, logvar = self.map_variational_forward(x)
-                x, mu, logvar = self.object_map_head(x)
+                x = self.object_map_head(x)
                 # x = torch.sigmoid(x)
                 return x, mu, logvar
             else:
@@ -263,7 +263,7 @@ class Prototype(nn.Module):
         if mode == 'road-map':
             if self.is_variational:
                 x, mu, logvar = self.map_variational_forward(x)
-                x, mu, logvar = self.road_map_head(x)
+                x = self.road_map_head(x)
                 # x = torch.sigmoid(x)
                 return x, mu, logvar
             else:
