@@ -6,7 +6,7 @@ from time import perf_counter
 
 import torch
 
-from data import get_unlabeled_set, get_labeled_set, set_seeds
+from data import get_unlabeled_set, get_labeled_set, set_seeds, make_bounding_box_images
 from model.resnet import Prototype
 
 #
@@ -28,6 +28,7 @@ labeled_epochs = 10
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = True
 resume_unlabeled = True
+resume_labeled = True
 
 #
 # Setup
@@ -55,11 +56,16 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=unlabeled_batch_size)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = Prototype(device, hidden_dim=hidden_size, variational=variational)
 
-if skip_unlabeled_training or resume_unlabeled:
+if skip_unlabeled_training or resume_unlabeled and not resume_labeled:
     print('==> Loading Saved Unlabeled Weights (Backbone)')
     file_path = os.path.join(output_path, 'unlabeled-backbone-latest.torch')
     model.load_backbone(file_path)
     # model.load_state_dict(torch.load('./resvar_weights/unlabeled-resnet-latest.torch'))
+
+if resume_labeled:
+    print('==> Loading Saved Labeled Weights (Backbone)')
+    file_path = os.path.join(output_path, 'labeled-backbone-latest.torch')
+    model.load_backbone(file_path)
 
 if torch.cuda.is_available():
     model = torch.nn.DataParallel(model)
@@ -133,15 +139,15 @@ for epoch in range(labeled_epochs):
     loss = 0.0
 
     max_batches = len(labeled_trainloader)
-    for idx, (images, _, road_map) in enumerate(labeled_trainloader):
+    for idx, (images, targets, road_map) in enumerate(labeled_trainloader):
         optimizer.zero_grad()
 
         images = torch.stack(images)
         images = images.to(device)
 
         # Rasterize bounding box images for reconstruction
-        # targets = make_bounding_box_images(targets)
-        # targets = targets.to(device)
+        targets = make_bounding_box_images(targets)
+        targets = targets.to(device)
 
         road_map = torch.stack(road_map).float()
         road_map = road_map.view(-1, 1, 800, 800)
@@ -150,16 +156,24 @@ for epoch in range(labeled_epochs):
         # print('input shape:', images.shape)
         # print('targt shape:', road_map.shape)
 
-        reconstructions, mu, logvar = model(images, mode='road-map')
+        obj_reconstructions, obj_mu, obj_logvar = model(images, mode='object-map')
+        road_reconstructions, road_mu, road_logvar = model(images, mode='road-map')
 
         # print('outpt shape:', reconstructions.shape)
 
-        loss, bce, kld = criterion(reconstructions, road_map,
-                                   mode='road-map',
-                                   mu=mu,
-                                   logvar=logvar,
-                                   kld_schedule=0.05,
-                                   i=i)
+        road_loss, road_bce, road_kld = criterion(road_reconstructions, road_map,
+                                                  mode='road-map',
+                                                  mu=mu,
+                                                  logvar=logvar,
+                                                  kld_schedule=0.05,
+                                                  i=i)
+        obj_loss, obj_bce, obj_kld = criterion(obj_reconstructions, targets,
+                                               mode='object-map',
+                                               mu=mu,
+                                               logvar=logvar,
+                                               kld_schedule=0.05,
+                                               i=i)
+        loss = road_loss + obj_loss
         loss.backward()
         optimizer.step()
 
@@ -176,4 +190,3 @@ for epoch in range(labeled_epochs):
     Prototype.save(model, file_prefix='labeled-roadmap-', save_dir=output_path)
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))
-
