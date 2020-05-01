@@ -92,7 +92,7 @@ class Prototype(nn.Module):
         #          --> Call UpSample(2,2)
         #          --> (batch size, 3, 800, 800)
         self.single_image_reconstructor_input_dim = 6144
-        self.object_map_reconstructor = nn.Sequential(
+        self.map_reconstructor = nn.Sequential(
             UnFlatten(input_size=6144),
 
             Interpolate(scale_factor=(4, 4), mode='bilinear'),
@@ -118,9 +118,18 @@ class Prototype(nn.Module):
             Interpolate(scale_factor=(2, 2), mode='bilinear'),
             nn.Conv2d(24, 12, kernel_size=7, stride=1, padding=1),
             nn.BatchNorm2d(12),
-            nn.ReLU(),
+            nn.ReLU()
+        )
 
-            nn.Conv2d(12, self.output_channels, kernel_size=7, stride=1, padding=1),
+        # Intakes from map_reconstructor
+        self.object_map_head = nn.Sequential(
+            nn.Conv2d(12, 3, kernel_size=7, stride=1, padding=1),
+            Interpolate(scale_factor=(2, 2), mode='nearest')
+        )
+
+        # Intakes from map_reconstructor
+        self.road_map_head = nn.Sequential(
+            nn.Conv2d(12, 1, kernel_size=7, stride=1, padding=1),
             Interpolate(scale_factor=(2, 2), mode='nearest')
         )
 
@@ -176,7 +185,7 @@ class Prototype(nn.Module):
 
         return z, mu, logvar
 
-    def object_map_forward(self, x):
+    def map_forward(self, x):
         # Re-stack images to be
         # (6-directions, batch size, channels, H, W)
         x = x.permute(1, 0, 2, 3, 4)
@@ -191,10 +200,10 @@ class Prototype(nn.Module):
         if self.is_variational:
             z, mu, logvar = self.backbone_variational_encode(x)
 
-        acc = self.object_map_reconstructor(acc)
+        acc = self.map_reconstructor(acc)
         return acc
 
-    def object_map_variational_forward(self, x):
+    def map_variational_forward(self, x):
         # Re-stack images to be
         # (6-directions, batch size, channels, H, W)
         x = x.permute(1, 0, 2, 3, 4)
@@ -226,8 +235,8 @@ class Prototype(nn.Module):
         # print('logvar acc', logvar_acc.shape)
 
         # Call the reconstructor directly, we've already done the FC as above
-        z_acc = self.object_map_reconstructor(z_acc)
-        z_acc = torch.sigmoid(z_acc)
+        z_acc = self.map_reconstructor(z_acc)
+        # z_acc = torch.sigmoid(z_acc)
 
         # print('z acc dec', z_acc.shape)
 
@@ -244,9 +253,21 @@ class Prototype(nn.Module):
 
         if mode == 'object-map':
             if self.is_variational:
-                return self.object_map_variational_forward(x)
+                x, mu, logvar = self.map_variational_forward(x)
+                x, mu, logvar = self.object_map_head(x)
+                # x = torch.sigmoid(x)
+                return x, mu, logvar
             else:
-                return self.object_map_forward(x)
+                return self.object_map_head(self.map_forward(x))
+
+        if mode == 'road-map':
+            if self.is_variational:
+                x, mu, logvar = self.map_variational_forward(x)
+                x, mu, logvar = self.road_map_head(x)
+                # x = torch.sigmoid(x)
+                return x, mu, logvar
+            else:
+                return self.road_map_head(self.map_forward(x))
 
     #
     # Utility Functions
@@ -298,6 +319,12 @@ class Prototype(nn.Module):
         elif mode == 'object-map':
             w = torch.FloatTensor(self.class_weights).to(self.device)
             loss_fn = nn.CrossEntropyLoss(weight=w, reduction=loss_reduction)
+
+        # LogSoftmax over the channels to compute probability of
+        # binary class under pixel for channel
+        elif mode == 'object-map':
+            w = torch.FloatTensor([0.1, 0.9]).to(self.device)
+            loss_fn = nn.BCEWithLogitsLoss(weight=w, reduction=loss_reduction)
         else:
             raise ValueError('Unexpected Mode:', mode)
 
