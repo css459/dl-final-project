@@ -9,6 +9,7 @@ from model.util import Interpolate, UnFlatten, remove_backbone_head
 MODES = ['single-image',
          'object-map',
          'road-map',
+         'object-road-maps',
          'jigsaw-pretext']
 
 
@@ -268,6 +269,17 @@ class Prototype(nn.Module):
                 return x, mu, logvar
             else:
                 return self.road_map_head(self.map_forward(x))
+
+        if mode == 'object-road-maps':
+            if self.is_variational:
+                x, mu, logvar = self.map_variational_forward(x)
+                x_obj = self.object_map_head(x)
+                x_road = self.road_map_head(x)
+                # x = torch.sigmoid(x)
+                return x_obj, x_road, mu, logvar
+            else:
+                x = self.map_forward(x)
+                return self.object_map_head(x), self.road_map_head(x)
 
     #
     # Utility Functions

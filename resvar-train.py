@@ -156,18 +156,20 @@ for epoch in range(labeled_epochs):
         # print('input shape:', images.shape)
         # print('targt shape:', road_map.shape)
 
-        obj_reconstructions, obj_mu, obj_logvar = model(images, mode='object-map')
-        road_reconstructions, road_mu, road_logvar = model(images, mode='road-map')
+        # obj_reconstructions, obj_mu, obj_logvar = model(images, mode='object-map')
+        # road_reconstructions, road_mu, road_logvar = model(images, mode='road-map')
+
+        obj_recon, road_recon, mu, logvar = model(images, mode='object-road-maps')
 
         # print('outpt shape:', reconstructions.shape)
 
-        road_loss, road_bce, road_kld = criterion(road_reconstructions, road_map,
+        road_loss, road_bce, road_kld = criterion(road_recon, road_map,
                                                   mode='road-map',
                                                   mu=mu,
                                                   logvar=logvar,
                                                   kld_schedule=0.05,
                                                   i=i)
-        obj_loss, obj_bce, obj_kld = criterion(obj_reconstructions, targets,
+        obj_loss, obj_bce, obj_kld = criterion(obj_recon, targets,
                                                mode='object-map',
                                                mu=mu,
                                                logvar=logvar,
