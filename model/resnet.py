@@ -277,6 +277,10 @@ class Prototype(nn.Module):
         for p in self.backbone.parameters():
             p.requires_grad = unfreeze
 
+    def load_backbone(self, file_path):
+        weights = torch.load(file_path, map_location=self.device)
+        self.backbone.load_state_dict(weights)
+
     @staticmethod
     def save(model, using_data_parallel=True, epoch_num=None,
              file_prefix='', save_dir='./resnet_weights'):

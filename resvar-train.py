@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import os
 from time import perf_counter
 
 import torch
@@ -55,8 +56,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = Prototype(device, hidden_dim=hidden_size, variational=variational)
 
 if skip_unlabeled_training or resume_unlabeled:
-    print('==> Loading Saved Unlabeled Weights')
-    model.load_state_dict(torch.load('./resvar_weights/unlabeled-resnet-latest.torch'))
+    print('==> Loading Saved Unlabeled Weights (Backbone)')
+    file_path = os.path.join(output_path, 'unlabeled-backbone-latest.torch')
+    model.load_backbone(file_path)
+    # model.load_state_dict(torch.load('./resvar_weights/unlabeled-resnet-latest.torch'))
 
 if torch.cuda.is_available():
     model = torch.nn.DataParallel(model)
