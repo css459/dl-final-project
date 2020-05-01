@@ -74,7 +74,7 @@ def get_labeled_set(batch_size=3, validation=None, extra_info=False):
         validation_idx = LABELED_SCENE_INDEX[-1] - int(labeled_sample_size * validation)
         assert validation_idx > LABELED_SCENE_INDEX[0]
 
-        print('Validation Index:', validation_idx)
+        print('==> Validation Index:', validation_idx)
 
         train_scene_idx = np.arange(LABELED_SCENE_INDEX[0], validation_idx)
         test_scene_idx = np.arange(validation_idx, LABELED_SCENE_INDEX[-1])
@@ -123,7 +123,7 @@ def _make_bounding_box_img_helper(sample, single_channel):
         b = b_boxes[i]
         b = b.T * 10
         b[:, 1] *= -1
-        b += + 400
+        b += 400
         b = [tuple(x) for x in b.numpy()]
         b[-2], b[-1] = b[-1], b[-2]
         c = cat[i].item() + 1  # Categories incremented by 1
@@ -162,7 +162,7 @@ def _make_bounding_box_img_helper(sample, single_channel):
     #    channels.append(np.array(canvas).astype(np.float32))
 
     # Background mask
-    mask = np.logical_not(np.sum(np.array(channels), 0, dtype=np.float))
+    mask = np.logical_not(np.sum(np.array(channels), 0, dtype=np.float32))
 
     # Stack masks along channels
     channels = np.array([mask] + channels)

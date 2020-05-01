@@ -21,8 +21,8 @@ batch_size = 32
 labeled_batch_size = 16
 hidden_size = 1024
 
-unlabeled_epochs = 10
-labeled_epochs = 10
+unlabeled_epochs = 1
+labeled_epochs = 1
 
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = False
@@ -73,7 +73,7 @@ print('==> Model Loaded. Begin Training')
 # Unlabeled Pre-training
 #
 
-criterion = model.loss_function
+criterion = model.module.loss_function
 optimizer = torch.optim.Adam(model.parameters())
 
 model.train()
@@ -136,7 +136,7 @@ for epoch in range(labeled_epochs):
 
         # print('outpt shape:', reconstructions.shape)
 
-        loss, bce, kld = criterion(reconstructions, images,
+        loss, bce, kld = criterion(reconstructions, targets,
                                    mode='object-map',
                                    mu=mu,
                                    logvar=logvar)
