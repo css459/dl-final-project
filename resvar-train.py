@@ -121,7 +121,7 @@ if not skip_unlabeled_training:
 #
 
 # FREEZE BACKBONE: No more training to the encoder
-model.freeze_backbone()
+model.module.freeze_backbone()
 print('==> BACKBONE FROZEN: Beginning Labeled Training')
 
 i = 0
