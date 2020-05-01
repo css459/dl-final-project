@@ -5,7 +5,7 @@ from time import perf_counter
 
 import torch
 
-from data import get_unlabeled_set, get_labeled_set, set_seeds, make_bounding_box_images
+from data import get_unlabeled_set, get_labeled_set, set_seeds
 from model.resnet import Prototype
 
 #
@@ -129,25 +129,27 @@ for epoch in range(labeled_epochs):
     loss = 0.0
 
     max_batches = len(labeled_trainloader)
-    for idx, (images, targets, _) in enumerate(labeled_trainloader):
+    for idx, (images, _, road_map) in enumerate(labeled_trainloader):
         optimizer.zero_grad()
 
         images = torch.stack(images)
         images = images.to(device)
 
         # Rasterize bounding box images for reconstruction
-        targets = make_bounding_box_images(targets)
-        targets = targets.to(device)
+        # targets = make_bounding_box_images(targets)
+        # targets = targets.to(device)
+
+        road_map = torch.stack(road_map).to(device)
 
         # print('input shape:', images.shape)
         # print('targt shape:', targets.shape)
 
-        reconstructions, mu, logvar = model(images, mode='object-map')
+        reconstructions, mu, logvar = model(images, mode='road-map')
 
         # print('outpt shape:', reconstructions.shape)
 
-        loss, bce, kld = criterion(reconstructions, targets,
-                                   mode='object-map',
+        loss, bce, kld = criterion(reconstructions, road_map,
+                                   mode='road-map',
                                    mu=mu,
                                    logvar=logvar,
                                    kld_schedule=0.05,
@@ -165,7 +167,7 @@ for epoch in range(labeled_epochs):
             print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
                   'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
-    Prototype.save(model, file_prefix='labeled-', save_dir=output_path)
+    Prototype.save(model, file_prefix='labeled-roadmap-', save_dir=output_path)
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))
 
