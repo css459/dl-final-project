@@ -124,8 +124,8 @@ if not skip_unlabeled_training:
 #
 
 # FREEZE BACKBONE: No more training to the encoder
-model.module.freeze_backbone()
-print('==> BACKBONE FROZEN: Beginning Labeled Training')
+# model.module.freeze_backbone()
+# print('==> BACKBONE FROZEN: Beginning Labeled Training')
 
 i = 0
 start_time = perf_counter()
@@ -143,10 +143,12 @@ for epoch in range(labeled_epochs):
         # targets = make_bounding_box_images(targets)
         # targets = targets.to(device)
 
-        road_map = torch.stack(road_map).to(device)
+        road_map = torch.stack(road_map).float()
+        road_map = road_map.view(-1, 1, 800, 800)
+        road_map = road_map.to(device)
 
         # print('input shape:', images.shape)
-        # print('targt shape:', targets.shape)
+        # print('targt shape:', road_map.shape)
 
         reconstructions, mu, logvar = model(images, mode='road-map')
 

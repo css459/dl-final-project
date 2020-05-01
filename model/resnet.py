@@ -326,9 +326,8 @@ class Prototype(nn.Module):
 
         # LogSoftmax over the channels to compute probability of
         # binary class under pixel for channel
-        elif mode == 'object-map':
-            w = torch.FloatTensor([0.1, 0.9]).to(self.device)
-            loss_fn = nn.BCEWithLogitsLoss(weight=w, reduction=loss_reduction)
+        elif mode == 'road-map':
+            loss_fn = nn.BCEWithLogitsLoss(reduction=loss_reduction)
         else:
             raise ValueError('Unexpected Mode:', mode)
 
