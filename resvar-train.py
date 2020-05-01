@@ -21,8 +21,8 @@ batch_size = 32
 labeled_batch_size = 16
 hidden_size = 1024
 
-unlabeled_epochs = 1
-labeled_epochs = 1
+unlabeled_epochs = 10
+labeled_epochs = 10
 
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = False
@@ -50,11 +50,7 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=batch_size)
 #
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = Prototype(hidden_dim=hidden_size)
-
-# Setup the variational parameters
-model.is_variational = variational
-model.device = device
+model = Prototype(device, hidden_dim=hidden_size, variational=variational)
 
 if skip_unlabeled_training:
     model.load_state_dict(torch.load('./resvar_weights/unlabeled-resnet-latest.torch'))
@@ -77,7 +73,7 @@ print('==> Model Loaded. Begin Training')
 # Unlabeled Pre-training
 #
 
-criterion = Prototype.var_loss_function
+criterion = model.loss_function
 optimizer = torch.optim.Adam(model.parameters())
 
 model.train()
@@ -93,8 +89,10 @@ if not skip_unlabeled_training:
 
             images = images.to(device)
             reconstructions, mu, logvar = model(images, mode='single-image')
-            loss, bce, kld = criterion(reconstructions, images, mu, logvar, mode='single-image')
-
+            loss, bce, kld = criterion(reconstructions, images,
+                                       mode='single-image',
+                                       mu=mu,
+                                       logvar=logvar)
             loss.backward()
             optimizer.step()
 
@@ -106,7 +104,7 @@ if not skip_unlabeled_training:
                 print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
                       'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
-        # Prototype.save(model, file_prefix='unlabeled-', save_dir=output_path)
+        Prototype.save(model, file_prefix='unlabeled-', save_dir=output_path)
 
     print('Unlabeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))
 
@@ -138,19 +136,21 @@ for epoch in range(labeled_epochs):
 
         # print('outpt shape:', reconstructions.shape)
 
-        loss, bce, kld = criterion(reconstructions, targets, mu, logvar, mode='object-map')
-
+        loss, bce, kld = criterion(reconstructions, images,
+                                   mode='object-map',
+                                   mu=mu,
+                                   logvar=logvar)
         loss.backward()
         optimizer.step()
 
         # Training Wheels
-        # print('loss', loss.item())
-        # break
+        print('loss', loss.item())
+        break
 
-        if idx % 1 == 0:
+        if idx % 10 == 0:
             print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
                   'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
-    # Prototype.save(model, file_prefix='labeled-', save_dir=output_path)
+    Prototype.save(model, file_prefix='labeled-', save_dir=output_path)
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))

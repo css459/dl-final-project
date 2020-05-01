@@ -10,15 +10,9 @@ class Interpolate(nn.Module):
         self.mode = mode
 
     def forward(self, x):
-        if self.mode == 'nearest':
-            y = self.interp(x,
-                            scale_factor=self.scale_factor,
-                            mode=self.mode)
-        else:
-            y = self.interp(x,
-                            scale_factor=self.scale_factor,
-                            mode=self.mode,
-                            align_corners=False)
+        y = self.interp(x,
+                        scale_factor=self.scale_factor,
+                        mode=self.mode)
         return y
 
 

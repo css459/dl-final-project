@@ -13,17 +13,17 @@ MODES = ['single-image',
 
 
 class Prototype(nn.Module):
-    def __init__(self, device, hidden_dim=1024, image_channels=3, 
+    def __init__(self, device, hidden_dim=1024, image_channels=3,
                  output_channels=3, variational=True):
         super().__init__()
 
         self.hidden_dim = hidden_dim
         self.input_image_channels = image_channels
         self.output_channels = output_channels
-        
+
         self.device = device
         self.is_variational = variational
-        
+
         # Class Weights for bounding-box image generator
         # [Background, Car, Other Object]
         self.class_weights = [0.05, 0.9, 0.05]
@@ -80,7 +80,7 @@ class Prototype(nn.Module):
         )
 
         # Bounding-box-image reconstruction
-        # Output size --> 10x400x400 (Interpolated to 10x800x800)
+        # Output size --> 3x400x400 (Interpolated to 10x800x800)
         #
         # INPUT: (batch size, 6144, 1, 1)
         # Let dim = 6144:
@@ -120,7 +120,7 @@ class Prototype(nn.Module):
             nn.BatchNorm2d(12),
             nn.ReLU(),
 
-            nn.Conv2d(12, 3, kernel_size=7, stride=1, padding=1),
+            nn.Conv2d(12, self.output_channels, kernel_size=7, stride=1, padding=1),
             Interpolate(scale_factor=(2, 2), mode='nearest')
         )
 
@@ -253,7 +253,7 @@ class Prototype(nn.Module):
     #
 
     @staticmethod
-    def save(model, using_dataparallel=True, epoch_num=None, 
+    def save(model, using_data_parallel=True, epoch_num=None,
              file_prefix='', save_dir='./resnet_weights'):
 
         if epoch_num is None:
@@ -266,41 +266,45 @@ class Prototype(nn.Module):
 
         full = os.path.join(save_dir, file_prefix + 'resnet-' + epoch_num + '.torch')
         backbone = os.path.join(save_dir, file_prefix + 'backbone-' + epoch_num + '.torch')
-        
-        if using_dataparallel:
+
+        if using_data_parallel:
             torch.save(model.module.state_dict(), full)
             torch.save(model.module.backbone.state_dict(), backbone)
         else:
             torch.save(model.state_dict(), full)
             torch.save(model.backbone.state_dict(), backbone)
 
-    # Reconstruction + KL divergence losses summed over all elements and batch
-    def var_loss_function(self, recon_x, x, mu, logvar, mode, loss_reduction='sum'):
+    def loss_function(self, recon_x, x, mode, mu=None, logvar=None, loss_reduction='sum'):
         assert mode in MODES
-        
+
+        if (mu is None or logvar is None) and self.is_variational:
+            raise ValueError('missing required parameters mu and logvar '
+                             'for variational loss')
+
         # How the losses are aggregated over the batch
         assert loss_reduction in ['sum', 'mean']
-        
+
         # Apply MSE loss over image pixels
         if mode == 'single-image':
             loss_fn = nn.MSELoss(reduction=loss_reduction)
-            loss = loss_fn(recon_x, x)
-            
+
+        # LogSoftmax over the channels to compute probability of
+        # class under pixel for channel
         elif mode == 'object-map':
-            # LogSoftmax over the channels to compute probability of
-            # class under pixel for channel
-            # lsm = nn.LogSoftmax(dim=1)
-            # loss_fn = nn.NLLLoss(reduction=loss_reduction)
-            # loss = loss_fn(lsm(recon_x), x)
             w = torch.FloatTensor(self.class_weights).to(self.device)
             loss_fn = nn.CrossEntropyLoss(weight=w, reduction=loss_reduction)
-            loss = loss_fn(recon_x, x)
-        
+        else:
+            raise ValueError('Unexpected Mode:', mode)
+
+        loss = loss_fn(recon_x, x)
+
         # BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, reduction='sum')
         # see Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-
-        return loss + kld, loss, kld
+        if self.is_variational:
+            kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+            return loss + kld, loss, kld
+        else:
+            return loss
