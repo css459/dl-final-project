@@ -97,7 +97,7 @@ if not skip_unlabeled_training:
                                        mode='single-image',
                                        mu=mu,
                                        logvar=logvar,
-                                       kld_schedule=0.0002,
+                                       kld_schedule=0.0015,
                                        i=i)
             loss.backward()
             optimizer.step()
@@ -150,7 +150,7 @@ for epoch in range(labeled_epochs):
                                    mode='object-map',
                                    mu=mu,
                                    logvar=logvar,
-                                   kld_schedule=0.0002,
+                                   kld_schedule=0.05,
                                    i=i)
         loss.backward()
         optimizer.step()

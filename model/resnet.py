@@ -8,7 +8,7 @@ from model.util import Interpolate, UnFlatten, remove_backbone_head
 
 MODES = ['single-image',
          'object-map',
-         'road-map'
+         'road-map',
          'jigsaw-pretext']
 
 
