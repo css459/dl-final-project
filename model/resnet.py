@@ -13,11 +13,20 @@ MODES = ['single-image',
 
 
 class Prototype(nn.Module):
-    def __init__(self, hidden_dim=1024, image_channels=3):
+    def __init__(self, device, hidden_dim=1024, image_channels=3, 
+                 output_channels=3, variational=True):
         super().__init__()
 
         self.hidden_dim = hidden_dim
         self.input_image_channels = image_channels
+        self.output_channels = output_channels
+        
+        self.device = device
+        self.is_variational = variational
+        
+        # Class Weights for bounding-box image generator
+        # [Background, Car, Other Object]
+        self.class_weights = [0.05, 0.9, 0.05]
 
         #
         # Backbone
@@ -35,9 +44,6 @@ class Prototype(nn.Module):
         #
         # These layers are used when the hidden encoding is to be variational
         #
-
-        self.device = None
-        self.is_variational = False
 
         z_dim = 512
         self.fc1_var_encode = nn.Linear(hidden_dim, z_dim)
@@ -80,11 +86,11 @@ class Prototype(nn.Module):
         # Let dim = 6144:
         #   Downscale dim by factor of 4 --> 4 Times
         #   Then, downscale dim by factor of 2 --> 1 Time
-        #   Them downscale two dimensions for a final dim of 10
+        #   Them downscale two dimensions for a final dim of 3
         #
-        # OUTPUT: (batch size, 10, 400, 400)
+        # OUTPUT: (batch size, 3, 400, 400)
         #          --> Call UpSample(2,2)
-        #          --> (batch size, 10, 800, 800)
+        #          --> (batch size, 3, 800, 800)
         self.single_image_reconstructor_input_dim = 6144
         self.object_map_reconstructor = nn.Sequential(
             UnFlatten(input_size=6144),
@@ -114,8 +120,8 @@ class Prototype(nn.Module):
             nn.BatchNorm2d(12),
             nn.ReLU(),
 
-            nn.Conv2d(12, 10, kernel_size=7, stride=1, padding=1),
-            Interpolate(scale_factor=(2, 2), mode='bilinear')
+            nn.Conv2d(12, 3, kernel_size=7, stride=1, padding=1),
+            Interpolate(scale_factor=(2, 2), mode='nearest')
         )
 
     #
@@ -227,7 +233,7 @@ class Prototype(nn.Module):
 
         return z_acc, mu_acc, logvar_acc
 
-    def forward(self, x, mode='single-image'):
+    def forward(self, x, mode):
         assert mode in MODES
 
         if mode == 'single-image':
@@ -247,7 +253,9 @@ class Prototype(nn.Module):
     #
 
     @staticmethod
-    def save(model, using_dataparallel=True, epoch_num=None, file_prefix='', save_dir='./resnet_weights'):
+    def save(model, using_dataparallel=True, epoch_num=None, 
+             file_prefix='', save_dir='./resnet_weights'):
+
         if epoch_num is None:
             epoch_num = 'latest'
         else:
@@ -258,6 +266,7 @@ class Prototype(nn.Module):
 
         full = os.path.join(save_dir, file_prefix + 'resnet-' + epoch_num + '.torch')
         backbone = os.path.join(save_dir, file_prefix + 'backbone-' + epoch_num + '.torch')
+        
         if using_dataparallel:
             torch.save(model.module.state_dict(), full)
             torch.save(model.module.backbone.state_dict(), backbone)
@@ -266,8 +275,7 @@ class Prototype(nn.Module):
             torch.save(model.backbone.state_dict(), backbone)
 
     # Reconstruction + KL divergence losses summed over all elements and batch
-    @staticmethod
-    def var_loss_function(recon_x, x, mu, logvar, mode, loss_reduction = 'sum'):
+    def var_loss_function(self, recon_x, x, mu, logvar, mode, loss_reduction='sum'):
         assert mode in MODES
         
         # How the losses are aggregated over the batch
@@ -284,7 +292,8 @@ class Prototype(nn.Module):
             # lsm = nn.LogSoftmax(dim=1)
             # loss_fn = nn.NLLLoss(reduction=loss_reduction)
             # loss = loss_fn(lsm(recon_x), x)
-            loss_fn = nn.CrossEntropyLoss(reduction=loss_reduction)
+            w = torch.FloatTensor(self.class_weights).to(self.device)
+            loss_fn = nn.CrossEntropyLoss(weight=w, reduction=loss_reduction)
             loss = loss_fn(recon_x, x)
         
         # BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, reduction='sum')

@@ -21,11 +21,11 @@ batch_size = 32
 labeled_batch_size = 16
 hidden_size = 1024
 
-unlabeled_epochs = 20
-labeled_epochs = 20
+unlabeled_epochs = 1
+labeled_epochs = 1
 
 # Loads the Unlabeled-trained model from disk
-skip_unlabeled_training = True
+skip_unlabeled_training = False
 
 #
 # Setup
@@ -99,8 +99,8 @@ if not skip_unlabeled_training:
             optimizer.step()
 
             # Training Wheels
-            # print('loss', loss.item())
-            # break
+            print('loss', loss.item())
+            break
 
             if idx % 1000 == 0:
                 print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
@@ -147,7 +147,7 @@ for epoch in range(labeled_epochs):
         # print('loss', loss.item())
         # break
 
-        if idx % 1000 == 0:
+        if idx % 1 == 0:
             print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
                   'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 

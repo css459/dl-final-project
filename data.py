@@ -126,19 +126,40 @@ def _make_bounding_box_img_helper(sample, single_channel):
         b += + 400
         b = [tuple(x) for x in b.numpy()]
         b[-2], b[-1] = b[-1], b[-2]
-        c = cat[i].item() + 1
+        c = cat[i].item() + 1 # Categories incremented by 1
         boxes.append(b)
         categories.append(c)
 
     # Build image
     channels = []
-    for c in range(1, 10):
-        canvas = Image.new('1', (800, 800))
-        context = ImageDraw.Draw(canvas)
-        boxes_idx = [i for i in range(len(categories)) if categories[i] == c]
-        for i in boxes_idx:
-            context.polygon(boxes[i], fill=1)
-        channels.append(np.array(canvas).astype(np.float32))
+    
+    # Categories incremented by 1
+    car_index = 2 + 1 
+    
+    # Car Mask
+    car_mask = Image.new('1', (800, 800))
+    context = ImageDraw.Draw(car_mask)
+    boxes_idx = [i for i in range(len(categories)) if categories[i] == car_index]
+    for i in boxes_idx:
+        context.polygon(boxes[i], fill=1)
+    channels.append(np.array(car_mask).astype(np.float32))
+    
+    # Other Mask
+    other_mask = Image.new('1', (800, 800))
+    context = ImageDraw.Draw(other_mask)
+    boxes_idx = [i for i in range(len(categories)) if categories[i] != car_index]
+    for i in boxes_idx:
+        context.polygon(boxes[i], fill=1)  
+    channels.append(np.array(other_mask).astype(np.float32))
+    
+    # We only need to predict: "background", "car", "sometihng else"
+    #for c in range(1, 10):
+    #    canvas = Image.new('1', (800, 800))
+    #    context = ImageDraw.Draw(canvas)
+    #    boxes_idx = [i for i in range(len(categories)) if categories[i] == c]
+    #    for i in boxes_idx:
+    #        context.polygon(boxes[i], fill=1)
+    #    channels.append(np.array(canvas).astype(np.float32))
 
     # Background mask
     mask = np.logical_not(np.sum(np.array(channels), 0, dtype=np.float))
