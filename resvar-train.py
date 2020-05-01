@@ -21,11 +21,12 @@ batch_size = 32
 labeled_batch_size = 16
 hidden_size = 1024
 
-unlabeled_epochs = 1
-labeled_epochs = 1
+unlabeled_epochs = 10
+labeled_epochs = 10
 
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = False
+resume_unlabeled = True
 
 #
 # Setup
@@ -52,7 +53,8 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=batch_size)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = Prototype(device, hidden_dim=hidden_size, variational=variational)
 
-if skip_unlabeled_training:
+if skip_unlabeled_training or resume_unlabeled:
+    print('==> Loading Saved Unlabeled Weights')
     model.load_state_dict(torch.load('./resvar_weights/unlabeled-resnet-latest.torch'))
 
 if torch.cuda.is_available():
@@ -97,8 +99,8 @@ if not skip_unlabeled_training:
             optimizer.step()
 
             # Training Wheels
-            print('loss', loss.item())
-            break
+            # print('loss', loss.item())
+            # break
 
             if idx % 1000 == 0:
                 print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
@@ -144,8 +146,8 @@ for epoch in range(labeled_epochs):
         optimizer.step()
 
         # Training Wheels
-        print('loss', loss.item())
-        break
+        # print('loss', loss.item())
+        # break
 
         if idx % 10 == 0:
             print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
@@ -154,3 +156,4 @@ for epoch in range(labeled_epochs):
     Prototype.save(model, file_prefix='labeled-', save_dir=output_path)
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))
+
