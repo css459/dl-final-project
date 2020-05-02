@@ -3,6 +3,7 @@ resnet_weights/
 slurm*.out
 *.torch
 *.zip
+slurms/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

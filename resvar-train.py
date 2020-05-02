@@ -19,7 +19,7 @@ variational = True
 output_path = '/scratch/css459/resvar_weights/'
 
 unlabeled_batch_size = 32
-labeled_batch_size = 16
+labeled_batch_size = 4
 hidden_size = 1024
 
 unlabeled_epochs = 10
@@ -64,7 +64,7 @@ if skip_unlabeled_training or resume_unlabeled and not resume_labeled:
 
 if resume_labeled:
     print('==> Loading Saved Labeled Weights (Backbone)')
-    file_path = os.path.join(output_path, 'labeled-backbone-latest.torch')
+    file_path = os.path.join(output_path, 'labeled-roadmap-backbone-latest.torch')
     model.load_backbone(file_path)
 
 if torch.cuda.is_available():
@@ -86,7 +86,7 @@ print('==> Model Loaded. Begin Training')
 #
 
 criterion = model.module.loss_function
-optimizer = torch.optim.Adam(model.parameters())
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 model.train()
 if not skip_unlabeled_training:
