@@ -28,7 +28,7 @@ labeled_epochs = 10
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = True
 resume_unlabeled = True
-resume_labeled = True
+resume_labeled = False
 
 #
 # Setup
@@ -56,7 +56,7 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=unlabeled_batch_size)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = Prototype(device, hidden_dim=hidden_size, variational=variational)
 
-if skip_unlabeled_training or resume_unlabeled and not resume_labeled:
+if (skip_unlabeled_training or resume_unlabeled) and not resume_labeled:
     print('==> Loading Saved Unlabeled Weights (Backbone)')
     file_path = os.path.join(output_path, 'unlabeled-backbone-latest.torch')
     model.load_backbone(file_path)

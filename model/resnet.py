@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torchvision.models.resnet import resnet18
 
-from model.util import Interpolate, UnFlatten, remove_backbone_head
+from model.util import Interpolate, UnFlatten, InterpolatingDecoder, remove_backbone_head
 
 MODES = ['single-image',
          'object-map',
@@ -27,7 +27,7 @@ class Prototype(nn.Module):
 
         # Class Weights for bounding-box image generator
         # [Background, Car, Other Object]
-        self.class_weights = [0.05, 0.9, 0.05]
+        self.object_weights = [0.05, 0.9, 0.05]
 
         #
         # Backbone
@@ -57,7 +57,7 @@ class Prototype(nn.Module):
 
         # Single-image reconstruction
         # Output size --> Input size
-        self.single_image_reconstructor_input_dim = hidden_dim
+        self.map_reconstructor_input_dim = hidden_dim
         self.single_image_reconstructor = nn.Sequential(
             UnFlatten(input_size=hidden_dim),
 
@@ -80,56 +80,19 @@ class Prototype(nn.Module):
             nn.Conv2d(32, image_channels, kernel_size=(3, 5), stride=1, padding=(1, 0))
         )
 
-        # Bounding-box-image reconstruction
-        # Output size --> 3x400x400 (Interpolated to 10x800x800)
-        #
-        # INPUT: (batch size, 6144, 1, 1)
-        # Let dim = 6144:
-        #   Downscale dim by factor of 4 --> 4 Times
-        #   Then, downscale dim by factor of 2 --> 1 Time
-        #   Them downscale two dimensions for a final dim of 3
-        #
-        # OUTPUT: (batch size, 3, 400, 400)
-        #          --> Call UpSample(2,2)
-        #          --> (batch size, 3, 800, 800)
-        self.single_image_reconstructor_input_dim = 6144
-        self.map_reconstructor = nn.Sequential(
-            UnFlatten(input_size=6144),
+        self.map_reconstructor_input_dim = 6144
 
-            Interpolate(scale_factor=(4, 4), mode='bilinear'),
-            nn.Conv2d(hidden_dim * 6, 1536, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(1536),
-            nn.ReLU(),
-
-            Interpolate(scale_factor=(4, 4), mode='bilinear'),
-            nn.Conv2d(1536, 384, kernel_size=5, stride=1, padding=1),
-            nn.BatchNorm2d(384),
-            nn.ReLU(),
-
-            Interpolate(scale_factor=(4, 4), mode='bilinear'),
-            nn.Conv2d(384, 96, kernel_size=7, stride=1, padding=1),
-            nn.BatchNorm2d(96),
-            nn.ReLU(),
-
-            Interpolate(scale_factor=(4, 4), mode='bilinear'),
-            nn.Conv2d(96, 24, kernel_size=7, stride=1, padding=1),
-            nn.BatchNorm2d(24),
-            nn.ReLU(),
-
-            Interpolate(scale_factor=(2, 2), mode='bilinear'),
-            nn.Conv2d(24, 12, kernel_size=7, stride=1, padding=1),
-            nn.BatchNorm2d(12),
-            nn.ReLU()
-        )
-
-        # Intakes from map_reconstructor
-        self.object_map_head = nn.Sequential(
+        # Reconstructs an image containing the heat-maps
+        # of potential object bounding-boxes
+        self.object_map_reconstructor = nn.Sequential(
+            InterpolatingDecoder(hidden_dim=hidden_dim),
             nn.Conv2d(12, 3, kernel_size=7, stride=1, padding=1),
             Interpolate(scale_factor=(2, 2), mode='nearest')
         )
 
-        # Intakes from map_reconstructor
-        self.road_map_head = nn.Sequential(
+        # Reconstructs the binary road map
+        self.road_map_reconstructor = nn.Sequential(
+            InterpolatingDecoder(hidden_dim=hidden_dim),
             nn.Conv2d(12, 1, kernel_size=7, stride=1, padding=1),
             Interpolate(scale_factor=(2, 2), mode='nearest')
         )
@@ -186,7 +149,7 @@ class Prototype(nn.Module):
 
         return z, mu, logvar
 
-    def map_forward(self, x):
+    def encoded_stack(self, x):
         # Re-stack images to be
         # (6-directions, batch size, channels, H, W)
         x = x.permute(1, 0, 2, 3, 4)
@@ -198,13 +161,10 @@ class Prototype(nn.Module):
             enc = self.backbone_encode(i)
             acc = torch.cat((acc, enc), 1)
 
-        if self.is_variational:
-            z, mu, logvar = self.backbone_variational_encode(x)
-
-        acc = self.map_reconstructor(acc)
+        # acc = self.map_reconstructor(acc)
         return acc
 
-    def map_variational_forward(self, x):
+    def encoded_variational_stack(self, x):
         # Re-stack images to be
         # (6-directions, batch size, channels, H, W)
         x = x.permute(1, 0, 2, 3, 4)
@@ -236,7 +196,7 @@ class Prototype(nn.Module):
         # print('logvar acc', logvar_acc.shape)
 
         # Call the reconstructor directly, we've already done the FC as above
-        z_acc = self.map_reconstructor(z_acc)
+        # z_acc = self.map_reconstructor(z_acc)
         # z_acc = torch.sigmoid(z_acc)
 
         # print('z acc dec', z_acc.shape)
@@ -254,32 +214,51 @@ class Prototype(nn.Module):
 
         if mode == 'object-map':
             if self.is_variational:
-                x, mu, logvar = self.map_variational_forward(x)
-                x = self.object_map_head(x)
+                x, mu, logvar = self.encoded_variational_stack(x)
+                x = self.object_map_reconstructor(x)
                 # x = torch.sigmoid(x)
                 return x, mu, logvar
             else:
-                return self.object_map_head(self.map_forward(x))
+                return self.object_map_reconstructor(self.encoded_stack(x))
 
         if mode == 'road-map':
             if self.is_variational:
-                x, mu, logvar = self.map_variational_forward(x)
-                x = self.road_map_head(x)
+                x, mu, logvar = self.encoded_variational_stack(x)
+                x = self.road_map_reconstructor(x)
                 # x = torch.sigmoid(x)
                 return x, mu, logvar
             else:
-                return self.road_map_head(self.map_forward(x))
+                return self.road_map_reconstructor(self.encoded_stack(x))
 
         if mode == 'object-road-maps':
             if self.is_variational:
-                x, mu, logvar = self.map_variational_forward(x)
-                x_obj = self.object_map_head(x)
-                x_road = self.road_map_head(x)
+                x, mu, logvar = self.encoded_variational_stack(x)
+                x_obj = self.object_map_reconstructor(x)
+                x_road = self.road_map_reconstructor(x)
                 # x = torch.sigmoid(x)
                 return x_obj, x_road, mu, logvar
             else:
-                x = self.map_forward(x)
-                return self.object_map_head(x), self.road_map_head(x)
+                x = self.encoded_stack(x)
+                return self.object_map_reconstructor(x), self.road_map_reconstructor(x)
+
+    #
+    # Inference
+    #
+
+    def infer_road_map(self, x, threshold=0.5):
+        self.eval()
+        x = self.forward(x, 'road-map')
+        return torch.where(torch.sigmoid(x) > threshold,
+                           torch.ones(x.shape), torch.zeros(x.shape))
+
+    def infer_object_heat_map(self, x):
+        self.eval()
+        x = self.forward(x, 'object-map')
+        return torch.softmax(x, 1)
+
+    def infer_single_image(self, x):
+        self.eval()
+        return self.forward(x, 'single-image')
 
     #
     # Utility Functions
@@ -333,7 +312,7 @@ class Prototype(nn.Module):
         # LogSoftmax over the channels to compute probability of
         # class under pixel for channel
         elif mode == 'object-map':
-            w = torch.FloatTensor(self.class_weights).to(self.device)
+            w = torch.FloatTensor(self.object_weights).to(self.device)
             loss_fn = nn.CrossEntropyLoss(weight=w, reduction=loss_reduction)
 
         # LogSoftmax over the channels to compute probability of
