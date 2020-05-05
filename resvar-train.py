@@ -18,20 +18,19 @@ from model.segmentation import SegmentationNetwork
 # The Resnet prototype will use variational
 # representations
 variational = True
-#output_path = '/scratch/css459/resvar_weights/'
-output_path = '../'
+output_path = '/scratch/css459/resvar_weights/'
+# output_path = '../'
 
 unlabeled_batch_size = 32
 labeled_batch_size = 4
-hidden_size = 1024
 
 unlabeled_epochs = 10
-labeled_epochs = 10
+labeled_epochs = 30
 
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = True
-load_unlabeled = True
-load_labeled = True
+load_unlabeled = False
+load_labeled = False
 
 #
 # Setup
@@ -57,20 +56,20 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=unlabeled_batch_size)
 #
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = Prototype(device, hidden_dim=hidden_size, variational=variational)
+model = Prototype(device, hidden_dim=1024, variational=variational)
 seg_model = SegmentationNetwork(model.backbone, 3)
 
 if load_unlabeled and not load_labeled:
     print('==> Loading Saved Unlabeled Weights (Backbone)')
-    file_path = os.path.join(output_path, 'unlabeled-backbone-latest.torch')
+    file_path = os.path.join(output_path, 'resvar-unlabeled-backbone-latest.torch')
     model.load_backbone(file_path)
     # model.load_state_dict(torch.load('./resvar_weights/unlabeled-resnet-latest.torch'))
 
 elif load_labeled:
     print('==> Loading Saved Labeled Weights (Backbone)')
-    file_path = os.path.join(output_path, 'labeled-roadmap-backbone-latest.torch')
-    # model.load_backbone(file_path)
-    model.load_state_dict(torch.load('../labeled-roadmap-backbone-latest.torch'))
+    file_path = os.path.join(output_path, 'resvar-latest.torch')
+    model.load_backbone(file_path)
+    # model.load_state_dict(torch.load('../labeled-roadmap-backbone-latest.torch'))
 
 if torch.cuda.is_available():
     model = torch.nn.DataParallel(model)
@@ -92,7 +91,7 @@ print('==> Model Loaded. Begin Training')
 #
 
 criterion = model.module.loss_function
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
 
 model.train()
 seg_model.train()
@@ -165,32 +164,29 @@ for epoch in range(labeled_epochs):
 
         # print('input shape:', images.shape)
         # print('targt shape:', road_map.shape)
-
         # obj_reconstructions, obj_mu, obj_logvar = model(images, mode='object-map')
         # road_reconstructions, road_mu, road_logvar = model(images, mode='road-map')
 
         obj_recon, road_recon, mu, logvar = model(images, mode='object-road-maps')
-
         seg_losses = seg_model(obj_recon, targets_seg)
-        
-        #print(seg_losses)
+
+        # print(seg_losses)
         # print('outpt shape:', reconstructions.shape)
 
-        road_loss, road_bce, road_kld = criterion(road_recon, road_map,
-                                                  mode='road-map',
-                                                  mu=mu,
-                                                  logvar=logvar,
-                                                  loss_reduction='mean',
-                                                  kld_schedule=0.05,
-                                                  i=i)
-        obj_loss, obj_bce, obj_kld = criterion(obj_recon, targets_img,
-                                               mode='object-map',
-                                               mu=mu,
-                                               logvar=logvar,
-                                               loss_reduction='mean',
-                                               kld_schedule=0.05,
-
-                                               i=i)
+        road_loss, _, _ = criterion(road_recon, road_map,
+                                    mode='road-map',
+                                    mu=mu,
+                                    logvar=logvar,
+                                    loss_reduction='mean',
+                                    kld_schedule=0.05,
+                                    i=i)
+        obj_loss, _, _ = criterion(obj_recon, targets_img,
+                                   mode='object-map',
+                                   mu=mu,
+                                   logvar=logvar,
+                                   loss_reduction='mean',
+                                   kld_schedule=0.05,
+                                   i=i)
 
         loss = road_loss + obj_loss + seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']
         loss.backward()
@@ -206,7 +202,7 @@ for epoch in range(labeled_epochs):
             print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
                   'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
-    Prototype.save(model, file_prefix='labeled-roadmap-', save_dir=output_path)
+    Prototype.save(model, file_prefix='labeled-', save_dir=output_path)
     torch.save(seg_model.state_dict(), 'segmentation-network-latest.torch')
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))

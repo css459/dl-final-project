@@ -1,8 +1,6 @@
 from torch import nn
 from torch.nn import functional as F
 
-from torchvision.models.detection import FasterRCNN
-
 
 class Interpolate(nn.Module):
     def __init__(self, scale_factor, mode):
@@ -92,18 +90,17 @@ class InterpolatingDecoder(nn.Module):
 def remove_backbone_head(model):
     return nn.Sequential(*(list(model.children())[:-1])), model.fc.in_features
 
-
-def make_object_seg_network_from_backbone(backbone, hidden_dim, num_classes):
-    backbone.out_channels = hidden_dim
-    # anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256, 512),),
-    #                                    aspect_ratios=((0.5, 1.0, 2.0),))
-    #
-    # roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=[0],
-    #                                                 output_size=7,
-    #                                                 sampling_ratio=2)
-    model = FasterRCNN(backbone,
-                       num_classes=num_classes,
-                       rpn_anchor_generator=None,
-                       box_roi_pool=None)
-
-    return model
+# def make_object_seg_network_from_backbone(backbone, hidden_dim, num_classes):
+#     backbone.out_channels = hidden_dim
+#     # anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256, 512),),
+#     #                                    aspect_ratios=((0.5, 1.0, 2.0),))
+#     #
+#     # roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=[0],
+#     #                                                 output_size=7,
+#     #                                                 sampling_ratio=2)
+#     model = FasterRCNN(backbone,
+#                        num_classes=num_classes,
+#                        rpn_anchor_generator=None,
+#                        box_roi_pool=None)
+#
+#     return model

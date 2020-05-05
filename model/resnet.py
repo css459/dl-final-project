@@ -15,12 +15,13 @@ MODES = ['single-image',
 
 class Prototype(nn.Module):
     def __init__(self, device, hidden_dim=1024, image_channels=3,
-                 output_channels=3, variational=True):
+                 output_channels=3, image_stack_count=6, variational=True):
         super().__init__()
 
         self.hidden_dim = hidden_dim
         self.input_image_channels = image_channels
         self.output_channels = output_channels
+        self.image_stack_count = image_stack_count
 
         self.device = device
         self.is_variational = variational
@@ -50,6 +51,9 @@ class Prototype(nn.Module):
         self.fc1_var_encode = nn.Linear(hidden_dim, z_dim)
         self.fc2_var_encode = nn.Linear(hidden_dim, z_dim)
         self.fc3_var_decode = nn.Linear(z_dim, hidden_dim)
+
+        self.fc_latent_translation = nn.Linear(z_dim * self.image_stack_count,
+                                               self.hidden_dim * self.image_stack_count)
 
         #
         # Different "Heads" for which to fit onto the backbone
@@ -186,10 +190,7 @@ class Prototype(nn.Module):
             logvar_acc = torch.cat((logvar_acc, logvar), 1)
 
         # Combination layer for latent concatenation
-        # NOTE: Is this correct to do this?
-        fc_latent_translation = nn.Linear(z_acc.size(1),
-                                          self.hidden_dim * x.size(0)).to(self.device)
-        z_acc = fc_latent_translation(z_acc)
+        z_acc = self.fc_latent_translation(z_acc)
 
         # print('z acc', z_acc.shape)
         # print('mu acc', mu_acc.shape)
@@ -230,6 +231,7 @@ class Prototype(nn.Module):
             else:
                 return self.road_map_reconstructor(self.encoded_stack(x))
 
+        # Combines the two in a single encoder pass to speed up training
         if mode == 'object-road-maps':
             if self.is_variational:
                 x, mu, logvar = self.encoded_variational_stack(x)
@@ -264,15 +266,6 @@ class Prototype(nn.Module):
 
         return torch.softmax(x, 1)
 
-    def infer_bounding_boxes(self, x):
-        self.eval()
-        if self.is_variational:
-            x, _, _ = self.forward(x, 'object-map')
-        else:
-            x = self.forward(x, 'object-map')
-
-        return self.segmentation_network(x)
-
     def infer_single_image(self, x):
         self.eval()
         if self.is_variational:
@@ -306,7 +299,7 @@ class Prototype(nn.Module):
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
-        full = os.path.join(save_dir, file_prefix + 'resnet-' + epoch_num + '.torch')
+        full = os.path.join(save_dir, file_prefix + 'resvar-' + epoch_num + '.torch')
         backbone = os.path.join(save_dir, file_prefix + 'backbone-' + epoch_num + '.torch')
 
         if using_data_parallel:
