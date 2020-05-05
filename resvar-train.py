@@ -18,7 +18,8 @@ from model.segmentation import SegmentationNetwork
 # The Resnet prototype will use variational
 # representations
 variational = True
-output_path = '/scratch/css459/resvar_weights/'
+#output_path = '/scratch/css459/resvar_weights/'
+output_path = '../'
 
 unlabeled_batch_size = 32
 labeled_batch_size = 4
@@ -68,7 +69,8 @@ if load_unlabeled and not load_labeled:
 elif load_labeled:
     print('==> Loading Saved Labeled Weights (Backbone)')
     file_path = os.path.join(output_path, 'labeled-roadmap-backbone-latest.torch')
-    model.load_backbone(file_path)
+    # model.load_backbone(file_path)
+    model.load_state_dict(torch.load('../labeled-roadmap-backbone-latest.torch'))
 
 if torch.cuda.is_available():
     model = torch.nn.DataParallel(model)
@@ -170,7 +172,8 @@ for epoch in range(labeled_epochs):
         obj_recon, road_recon, mu, logvar = model(images, mode='object-road-maps')
 
         seg_losses = seg_model(obj_recon, targets_seg)
-
+        
+        #print(seg_losses)
         # print('outpt shape:', reconstructions.shape)
 
         road_loss, road_bce, road_kld = criterion(road_recon, road_map,
@@ -201,5 +204,6 @@ for epoch in range(labeled_epochs):
                   'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
     Prototype.save(model, file_prefix='labeled-roadmap-', save_dir=output_path)
+    torch.save(seg_model.state_dict(), 'segmentation-network-latest.torch')
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))

@@ -11,3 +11,4 @@ class SegmentationNetwork(nn.Module):
 
     def forward(self, x, boxes=None):
         x = self.segmentation_network(x, boxes)
+        return x
