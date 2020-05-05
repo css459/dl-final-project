@@ -3,9 +3,11 @@ You need to implement all four functions in this file and also put your team inf
 Then you should submit the python file with your model class, the state_dict, and this file
 """
 
+import os
 import torch
 import torchvision
-
+from model.resnet import Prototype
+from model.segmentation import SegmentationNetwork
 
 # Put your transform function here, we will use it for our dataloader
 # For bounding boxes task
@@ -27,13 +29,17 @@ class ModelLoader():
     contact_email = '@nyu.edu'
 
     def __init__(self, model_file='put_your_model_file(or files)_name_here'):
-        # You should 
-        #       1. create the model object
-        #       2. load your state_dict
-        #       3. call cuda()
-        # self.model = ...
-        # 
-        pass
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        model = Prototype(device, hidden_dim=1024, variational=True)
+
+        unlabeled_backbone = 'unlabeled-backbone-latest.torch'
+        labeled_backbone = 'labeled-roadmap-backbone-latest.torch'
+
+        model.load_backbone(unlabeled_backbone)
+        model.load_state_dict(torch.load(labeled_backbone))
+
+        self.model = model.to(device)
 
     def get_bounding_boxes(self, samples):
         # samples is a cuda tensor with size [batch_size, 6, 3, 256, 306]
@@ -44,6 +50,9 @@ class ModelLoader():
 
     def get_binary_road_map(self, samples):
         # samples is a cuda tensor with size [batch_size, 6, 3, 256, 306]
-        # You need to return a cuda tensor with size [batch_size, 800, 800] 
+        # You need to return a cuda tensor with size [batch_size, 800, 800]
+        self.model.eval()
 
-        return torch.rand(1, 800, 800) > 0.5
+        with torch.no_grad():
+            obj_recon, road_recon, mu, logvar = self.model(samples, mode='object-road-maps')
+            return obj_recon
