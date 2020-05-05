@@ -174,6 +174,46 @@ def _make_bounding_box_img_helper(sample, single_channel):
     return torch.from_numpy(channels)
 
 
+# Required for FasterRCNN PyTorch implementation
+# to convert the given format to its format
+def convert_bounding_box_targets(targets, device):
+    return [_convert_bounding_box_targets_helper(t, device) for t in targets]
+
+
+def _convert_bounding_box_targets_helper(sample, device):
+    boxes = []
+    categories = []
+    b_boxes = sample['bounding_box'].numpy()
+    cat = sample['category']
+
+    # Iterate over boxes
+    for i in range(len(b_boxes)):
+        b = b_boxes[i]
+        b = b.T * 10
+        b[:, 1] *= -1
+        b += 400
+
+        x_min = min([x[0] for x in b])
+        x_max = max([x[0] for x in b])
+        y_min = min([y[1] for y in b])
+        y_max = max([y[1] for y in b])
+
+        b = [x_min, y_min, x_max, y_max]
+        c = cat[i].item() + 1  # Categories incremented by 1
+        boxes.append(b)
+        categories.append(c)
+
+    # Anything that's not a car is something else
+    car_index = 2 + 1
+    categories = [1 if c == car_index else 2 for c in categories]
+
+    # Make tensor
+    boxes = torch.FloatTensor(boxes).to(device)
+    categories = torch.LongTensor(categories).to(device)
+
+    return {'boxes': boxes, 'labels': categories}
+
+
 def tensor_to_image(x, channel=0, as_type='bool', detach=False):
     c = x[channel]
     if detach:

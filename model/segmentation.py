@@ -11,11 +11,3 @@ class SegmentationNetwork(nn.Module):
 
     def forward(self, x, boxes=None):
         x = self.segmentation_network(x, boxes)
-
-
-def convert_boxes(boxes):
-    pass
-
-
-def loss_function(pred_boxes, boxes):
-    pass

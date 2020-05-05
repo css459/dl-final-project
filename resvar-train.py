@@ -6,8 +6,10 @@ from time import perf_counter
 
 import torch
 
-from data import get_unlabeled_set, get_labeled_set, set_seeds, make_bounding_box_images
+from data import get_unlabeled_set, get_labeled_set, set_seeds, \
+    make_bounding_box_images, convert_bounding_box_targets
 from model.resnet import Prototype
+from model.segmentation import SegmentationNetwork
 
 #
 # Parameters
@@ -27,8 +29,8 @@ labeled_epochs = 10
 
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = True
-resume_unlabeled = True
-resume_labeled = False
+load_unlabeled = True
+load_labeled = True
 
 #
 # Setup
@@ -55,14 +57,15 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=unlabeled_batch_size)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = Prototype(device, hidden_dim=hidden_size, variational=variational)
+seg_model = SegmentationNetwork(model.backbone, 3)
 
-if (skip_unlabeled_training or resume_unlabeled) and not resume_labeled:
+if load_unlabeled and not load_labeled:
     print('==> Loading Saved Unlabeled Weights (Backbone)')
     file_path = os.path.join(output_path, 'unlabeled-backbone-latest.torch')
     model.load_backbone(file_path)
     # model.load_state_dict(torch.load('./resvar_weights/unlabeled-resnet-latest.torch'))
 
-if resume_labeled:
+elif load_labeled:
     print('==> Loading Saved Labeled Weights (Backbone)')
     file_path = os.path.join(output_path, 'labeled-roadmap-backbone-latest.torch')
     model.load_backbone(file_path)
@@ -73,6 +76,7 @@ if torch.cuda.is_available():
     print('==> Using Data Parallel Devices:', torch.cuda.device_count())
 
 model = model.to(device)
+seg_model.to(device)
 
 print('==> Device:', device)
 print('==> Batch Size:', unlabeled_batch_size)
@@ -89,6 +93,7 @@ criterion = model.module.loss_function
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 model.train()
+seg_model.train()
 if not skip_unlabeled_training:
 
     i = 0
@@ -146,8 +151,11 @@ for epoch in range(labeled_epochs):
         images = images.to(device)
 
         # Rasterize bounding box images for reconstruction
-        targets = make_bounding_box_images(targets)
-        targets = targets.to(device)
+        targets_img = make_bounding_box_images(targets)
+        targets_img = targets_img.to(device)
+
+        # Make the targets for the Segmentation Network
+        targets_seg = convert_bounding_box_targets(targets, device)
 
         road_map = torch.stack(road_map).float()
         road_map = road_map.view(-1, 1, 800, 800)
@@ -161,6 +169,8 @@ for epoch in range(labeled_epochs):
 
         obj_recon, road_recon, mu, logvar = model(images, mode='object-road-maps')
 
+        seg_losses = seg_model(obj_recon, targets_seg)
+
         # print('outpt shape:', reconstructions.shape)
 
         road_loss, road_bce, road_kld = criterion(road_recon, road_map,
@@ -169,13 +179,14 @@ for epoch in range(labeled_epochs):
                                                   logvar=logvar,
                                                   kld_schedule=0.05,
                                                   i=i)
-        obj_loss, obj_bce, obj_kld = criterion(obj_recon, targets,
+        obj_loss, obj_bce, obj_kld = criterion(obj_recon, targets_img,
                                                mode='object-map',
                                                mu=mu,
                                                logvar=logvar,
                                                kld_schedule=0.05,
                                                i=i)
-        loss = road_loss + obj_loss
+
+        loss = road_loss + obj_loss + seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']
         loss.backward()
         optimizer.step()
 

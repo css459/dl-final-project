@@ -38,17 +38,6 @@ class UnFlatten(nn.Module):
         return x.view(x.size(0), self.input_size, 1, 1)
 
 
-# class StackedEncoder(nn.Module):
-#     def __init__(self, backbone, fc_translation_layer):
-#         super().__init__()
-#
-#         self.backbone = backbone
-#         self.fc_translation_layer = fc_translation_layer
-#
-#     def forward(self, x):
-#         pass
-
-
 class InterpolatingDecoder(nn.Module):
 
     def __init__(self, hidden_dim):
