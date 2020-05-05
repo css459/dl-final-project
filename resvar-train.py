@@ -180,13 +180,16 @@ for epoch in range(labeled_epochs):
                                                   mode='road-map',
                                                   mu=mu,
                                                   logvar=logvar,
+                                                  loss_reduction='mean',
                                                   kld_schedule=0.05,
                                                   i=i)
         obj_loss, obj_bce, obj_kld = criterion(obj_recon, targets_img,
                                                mode='object-map',
                                                mu=mu,
                                                logvar=logvar,
+                                               loss_reduction='mean',
                                                kld_schedule=0.05,
+
                                                i=i)
 
         loss = road_loss + obj_loss + seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']
