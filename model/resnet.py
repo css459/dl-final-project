@@ -247,18 +247,40 @@ class Prototype(nn.Module):
 
     def infer_road_map(self, x, threshold=0.5):
         self.eval()
-        x = self.forward(x, 'road-map')
+        if self.is_variational:
+            x, _, _ = self.forward(x, 'road-map')
+        else:
+            x = self.forward(x, 'road-map')
+
         return torch.where(torch.sigmoid(x) > threshold,
                            torch.ones(x.shape), torch.zeros(x.shape))
 
     def infer_object_heat_map(self, x):
         self.eval()
-        x = self.forward(x, 'object-map')
+        if self.is_variational:
+            x, _, _ = self.forward(x, 'object-map')
+        else:
+            x = self.forward(x, 'object-map')
+
         return torch.softmax(x, 1)
+
+    def infer_bounding_boxes(self, x):
+        self.eval()
+        if self.is_variational:
+            x, _, _ = self.forward(x, 'object-map')
+        else:
+            x = self.forward(x, 'object-map')
+
+        return self.segmentation_network(x)
 
     def infer_single_image(self, x):
         self.eval()
-        return self.forward(x, 'single-image')
+        if self.is_variational:
+            x, _, _ = self.forward(x, 'single-image')
+        else:
+            x = self.forward(x, 'single-image')
+
+        return x
 
     #
     # Utility Functions
