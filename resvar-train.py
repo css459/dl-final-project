@@ -19,7 +19,6 @@ from model.segmentation import SegmentationNetwork
 # representations
 variational = True
 output_path = '/scratch/css459/resvar_weights/'
-# output_path = '../'
 
 unlabeled_batch_size = 32
 labeled_batch_size = 4
@@ -29,14 +28,14 @@ labeled_epochs = 30
 
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = True
-load_unlabeled = False
+load_unlabeled = True
 load_labeled = False
 
 #
 # Setup
 #
 
-set_seeds()
+#set_seeds()
 torch.backends.cudnn.benchmark = True
 
 if torch.cuda.is_available():
@@ -61,7 +60,7 @@ seg_model = SegmentationNetwork(model.backbone, 3)
 
 if load_unlabeled and not load_labeled:
     print('==> Loading Saved Unlabeled Weights (Backbone)')
-    file_path = os.path.join(output_path, 'resvar-unlabeled-backbone-latest.torch')
+    file_path = os.path.join(output_path, 'unlabeled-resvar-backbone-latest.torch')
     model.load_backbone(file_path)
     # model.load_state_dict(torch.load('./resvar_weights/unlabeled-resnet-latest.torch'))
 
@@ -83,7 +82,6 @@ print('==> Device:', device)
 print('==> Batch Size:', unlabeled_batch_size)
 print('==> Unlabeled Epochs:', unlabeled_epochs)
 print('==> Labeled Epochs:', labeled_epochs)
-print('==> Hidden Encoding Size per Image:', hidden_size)
 print('==> Model Loaded. Begin Training')
 
 #
