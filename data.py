@@ -214,6 +214,20 @@ def _convert_bounding_box_targets_helper(sample, device):
     return {'boxes': boxes, 'labels': categories}
 
 
+def convert_bounding_box_inference(preds):
+    return [_convert_bounding_box_inference_helper(p) for p in preds]
+
+
+def _convert_bounding_box_inference_helper(pred):
+    boxes = pred['boxes']
+    new_boxes = []
+    for b in boxes:
+        x1, y1, x2, y2 = b[0], b[1], b[2], b[3]
+        new_boxes.append([[x2, x2, x1, x1], [y1, y2, y1, y2]])
+
+    return torch.FloatTensor(new_boxes).to('cuda')  # HACK HACK HACK
+
+
 def tensor_to_image(x, channel=0, as_type='bool', detach=False):
     c = x[channel]
     if detach:
