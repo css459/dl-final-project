@@ -18,7 +18,7 @@ from model.segmentation import SegmentationNetwork
 # The Resnet prototype will use variational
 # representations
 variational = True
-output_path = '/scratch/css459/resvar_weights/'
+output_path = '../resvar_weights/'
 
 unlabeled_batch_size = 32
 labeled_batch_size = 4
@@ -29,7 +29,7 @@ labeled_epochs = 30
 # Loads the Unlabeled-trained model from disk
 skip_unlabeled_training = True
 load_unlabeled = True
-load_labeled = False
+load_labeled = True
 
 #
 # Setup
@@ -56,7 +56,15 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=unlabeled_batch_size)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = Prototype(device, hidden_dim=1024, variational=variational)
-seg_model = SegmentationNetwork(model.backbone, 3)
+#seg_model = SegmentationNetwork(model.backbone, 3)
+
+# ---------------------------------------------------
+from torchvision.models.resnet import resnet18
+from model.util import remove_backbone_head
+
+seg_backbone, _ = remove_backbone_head(resnet18(pretrained=False))
+seg_model = SegmentationNetwork(seg_backbone, 2)
+# ---------------------------------------------------
 
 if load_unlabeled and not load_labeled:
     print('==> Loading Saved Unlabeled Weights (Backbone)')
@@ -66,9 +74,9 @@ if load_unlabeled and not load_labeled:
 
 elif load_labeled:
     print('==> Loading Saved Labeled Weights (Backbone)')
-    file_path = os.path.join(output_path, 'resvar-latest.torch')
-    model.load_backbone(file_path)
-    # model.load_state_dict(torch.load('../labeled-roadmap-backbone-latest.torch'))
+    file_path = os.path.join(output_path, 'labeled-resvar-latest.torch')
+    #model.load_backbone(file_path)
+    model.load_state_dict(torch.load(file_path))
 
 if torch.cuda.is_available():
     model = torch.nn.DataParallel(model)
@@ -89,7 +97,7 @@ print('==> Model Loaded. Begin Training')
 #
 
 criterion = model.module.loss_function
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
 model.train()
 seg_model.train()
@@ -166,9 +174,9 @@ for epoch in range(labeled_epochs):
         # road_reconstructions, road_mu, road_logvar = model(images, mode='road-map')
 
         obj_recon, road_recon, mu, logvar = model(images, mode='object-road-maps')
+        #obj_recon, road_recon = model(images, mode='object-road-maps')
         seg_losses = seg_model(obj_recon, targets_seg)
 
-        # print(seg_losses)
         # print('outpt shape:', reconstructions.shape)
 
         road_loss, _, _ = criterion(road_recon, road_map,
@@ -178,16 +186,44 @@ for epoch in range(labeled_epochs):
                                     loss_reduction='mean',
                                     kld_schedule=0.05,
                                     i=i)
-        obj_loss, _, _ = criterion(obj_recon, targets_img,
-                                   mode='object-map',
+        obj_loss, _, obj_kld = criterion(obj_recon, targets_img,
+                                   mode='road-map',
                                    mu=mu,
                                    logvar=logvar,
                                    loss_reduction='mean',
                                    kld_schedule=0.05,
                                    i=i)
+        
+        # road_loss = criterion(road_recon, road_map,
+        #                             mode='road-map',
+        #                             loss_reduction='sum',
+        #                             i=i)
+        # obj_loss= criterion(obj_recon, targets_img,
+        #                            mode='road-map',
+        #                            loss_reduction='sum',
+        #                            i=i)
 
-        loss = road_loss + obj_loss + seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']
+        road_loss.backward(retain_graph=True)
+        loss = obj_loss
+        
+        seg_losses = seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']         
+        #seg_losses = seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg'] + seg_losses['loss_objectness'] + seg_losses['loss_rpn_box_reg']
+
+        # Start training the Segmentation Network after 1 Epoch
+        if epoch > 0:
+            loss += seg_losses
         loss.backward()
+
+        # loss.backward(retain_graph=True)
+
+        # # Do not backprop through the full model
+        # if epoch > 0:
+        #     model.requires_grad = False
+        #     model.eval()
+        #     seg_losses.backward()
+        #     model.requires_grad = True
+        #     model.train()
+
         optimizer.step()
 
         i += 1
@@ -197,10 +233,10 @@ for epoch in range(labeled_epochs):
         # break
 
         if idx % 10 == 0:
-            print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
+            print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(), 'seg loss', seg_losses.item(),
                   'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
     Prototype.save(model, file_prefix='labeled-', save_dir=output_path)
-    torch.save(seg_model.state_dict(), 'segmentation-network-latest.torch')
+    torch.save(seg_model.state_dict(), output_path + 'segmentation-network-latest.torch')
 
 print('Labeled Training Took (Min):', round(int(perf_counter() - start_time) / 60, 2))

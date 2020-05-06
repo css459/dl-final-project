@@ -29,7 +29,7 @@ class ModelLoader():
     team_member = ['Cole Smith']
     contact_email = 'css@nyu.edu'
 
-    def __init__(self, model_file='resvar.torch', model_file2='segmenter.torch'):
+    def __init__(self, model_file='../resvar_weights/labeled-resvar-latest.torch', model_file2='../resvar_weights/segmentation-network-latest.torch'):
         # You should 
         #       1. create the model object
         #       2. load your state_dict
@@ -38,7 +38,14 @@ class ModelLoader():
         # 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = Prototype(device, hidden_dim=1024, variational=True)
-        self.seg_model = SegmentationNetwork(self.model.backbone, 3)
+
+        from torchvision.models.resnet import resnet18
+        from model.util import remove_backbone_head
+
+        seg_backbone, _ = remove_backbone_head(resnet18(pretrained=False))
+        self.seg_model = SegmentationNetwork(seg_backbone, 2)
+
+        #self.seg_model = SegmentationNetwork(self.model.backbone, 3)
 
         # Load models
         self.model.load_state_dict(torch.load(model_file))
@@ -54,14 +61,15 @@ class ModelLoader():
         # samples is a cuda tensor with size [batch_size, 6, 3, 256, 306]
         # You need to return a tuple with size 'batch_size' and each element is a cuda tensor [N, 2, 4]
         # where N is the number of object
-        outputs = self.seg_model.infer(self.model.infer_object_heat_map(samples))
-        print(outputs.shape)
-        return outputs
-        # return torch.rand(1, 15, 2, 4) * 10
+        #outputs = self.seg_model.infer(self.model.infer_object_heat_map(samples))
+        #outputs = [o.float32() for o in outputs]
+        #print(outputs)
+        #return outputs
+        return torch.rand(1, 15, 2, 4).double() * 10
 
     def get_binary_road_map(self, samples):
         # samples is a cuda tensor with size [batch_size, 6, 3, 256, 306]
         # You need to return a cuda tensor with size [batch_size, 800, 800]
         outputs = self.model.infer_road_map(samples)
-        return outputs
+        return outputs > 0.5
         # return torch.rand(1, 800, 800) > 0.5

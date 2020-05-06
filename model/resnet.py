@@ -90,7 +90,7 @@ class Prototype(nn.Module):
         # of potential object bounding-boxes
         self.object_map_reconstructor = nn.Sequential(
             InterpolatingDecoder(hidden_dim=hidden_dim),
-            nn.Conv2d(12, 3, kernel_size=7, stride=1, padding=1),
+            nn.Conv2d(12, 1, kernel_size=7, stride=1, padding=1),
             Interpolate(scale_factor=(2, 2), mode='nearest')
         )
 
@@ -254,8 +254,9 @@ class Prototype(nn.Module):
         else:
             x = self.forward(x, 'road-map')
 
-        return torch.where(torch.sigmoid(x) > threshold,
-                           torch.ones(x.shape), torch.zeros(x.shape))
+        return torch.sigmoid(x)
+        # return torch.where(torch.sigmoid(x) > threshold,
+        #                    torch.ones(x.shape).to(self.device), torch.zeros(x.shape).to(self.device))
 
     def infer_object_heat_map(self, x):
         self.eval()
@@ -264,7 +265,7 @@ class Prototype(nn.Module):
         else:
             x = self.forward(x, 'object-map')
 
-        return torch.softmax(x, 1)
+        return torch.sigmoid(x)
 
     def infer_single_image(self, x):
         self.eval()

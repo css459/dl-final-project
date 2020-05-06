@@ -107,9 +107,31 @@ def get_labeled_set(batch_size=3, validation=None, extra_info=False):
 
 
 def make_bounding_box_images(batch, single_channel=True):
-    return torch.stack([_make_bounding_box_img_helper(b, single_channel=single_channel)
+    return torch.stack([_make_bounding_box_img_simple(b, single_channel=single_channel)
                         for b in batch])
 
+def _make_bounding_box_img_simple(sample, single_channel):
+    boxes = []
+    b_boxes = sample['bounding_box']
+
+    # Iterate over boxes
+    for i in range(len(b_boxes)):
+        b = b_boxes[i]
+        b = b.T * 10
+        b[:, 1] *= -1
+        b += 400
+        b = [tuple(x) for x in b.numpy()]
+        b[-2], b[-1] = b[-1], b[-2]
+        boxes.append(b)
+
+    # All Mask
+    car_mask = Image.new('1', (800, 800))
+    context = ImageDraw.Draw(car_mask)
+    for b in boxes:
+        context.polygon(b, fill=1)
+
+    car_mask = np.array(car_mask).astype(np.float)
+    return torch.from_numpy(car_mask).float()[None, ...]
 
 def _make_bounding_box_img_helper(sample, single_channel):
     boxes = []
@@ -205,7 +227,8 @@ def _convert_bounding_box_targets_helper(sample, device):
 
     # Anything that's not a car is something else
     car_index = 2 + 1
-    categories = [1 if c == car_index else 2 for c in categories]
+    #categories = [1 if c == car_index else 2 for c in categories]
+    categories = [1] * len(categories)
 
     # Make tensor
     boxes = torch.FloatTensor(boxes).to(device)
@@ -225,7 +248,7 @@ def _convert_bounding_box_inference_helper(pred):
         x1, y1, x2, y2 = b[0], b[1], b[2], b[3]
         new_boxes.append([[x2, x2, x1, x1], [y1, y2, y1, y2]])
 
-    return torch.FloatTensor(new_boxes).to('cuda')  # HACK HACK HACK
+    return torch.DoubleTensor(new_boxes).to('cuda')  # HACK HACK HACK
 
 
 def tensor_to_image(x, channel=0, as_type='bool', detach=False):
