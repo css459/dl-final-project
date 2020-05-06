@@ -173,15 +173,9 @@ class Prototype(nn.Module):
         # (6-directions, batch size, channels, H, W)
         x = x.permute(1, 0, 2, 3, 4)
 
-        # print('x', x.shape)
-
         # Encode all 6 images along the
         # second dimension
         z_acc, mu_acc, logvar_acc = self.backbone_variational_encode(x[0])
-
-        # print('z acc', z_acc.shape)
-        # print('mu acc', mu_acc.shape)
-        # print('logvar acc', logvar_acc.shape)
 
         for i in x[1:]:
             z, mu, logvar = self.backbone_variational_encode(i)
@@ -191,16 +185,6 @@ class Prototype(nn.Module):
 
         # Combination layer for latent concatenation
         z_acc = self.fc_latent_translation(z_acc)
-
-        # print('z acc', z_acc.shape)
-        # print('mu acc', mu_acc.shape)
-        # print('logvar acc', logvar_acc.shape)
-
-        # Call the reconstructor directly, we've already done the FC as above
-        # z_acc = self.map_reconstructor(z_acc)
-        # z_acc = torch.sigmoid(z_acc)
-
-        # print('z acc dec', z_acc.shape)
 
         return z_acc, mu_acc, logvar_acc
 
@@ -217,7 +201,6 @@ class Prototype(nn.Module):
             if self.is_variational:
                 x, mu, logvar = self.encoded_variational_stack(x)
                 x = self.object_map_reconstructor(x)
-                # x = torch.sigmoid(x)
                 return x, mu, logvar
             else:
                 return self.object_map_reconstructor(self.encoded_stack(x))
@@ -226,7 +209,6 @@ class Prototype(nn.Module):
             if self.is_variational:
                 x, mu, logvar = self.encoded_variational_stack(x)
                 x = self.road_map_reconstructor(x)
-                # x = torch.sigmoid(x)
                 return x, mu, logvar
             else:
                 return self.road_map_reconstructor(self.encoded_stack(x))
@@ -237,7 +219,6 @@ class Prototype(nn.Module):
                 x, mu, logvar = self.encoded_variational_stack(x)
                 x_obj = self.object_map_reconstructor(x)
                 x_road = self.road_map_reconstructor(x)
-                # x = torch.sigmoid(x)
                 return x_obj, x_road, mu, logvar
             else:
                 x = self.encoded_stack(x)
@@ -264,7 +245,6 @@ class Prototype(nn.Module):
             x, _, _ = self.forward(x, 'object-map')
         else:
             x = self.forward(x, 'object-map')
-
         return torch.sigmoid(x)
 
     def infer_single_image(self, x):
@@ -273,7 +253,6 @@ class Prototype(nn.Module):
             x, _, _ = self.forward(x, 'single-image')
         else:
             x = self.forward(x, 'single-image')
-
         return x
 
     #
