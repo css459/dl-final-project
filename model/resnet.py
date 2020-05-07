@@ -90,6 +90,7 @@ class Prototype(nn.Module):
         # of potential object bounding-boxes
         self.object_map_reconstructor = nn.Sequential(
             InterpolatingDecoder(hidden_dim=hidden_dim),
+            nn.Dropout(0.5),
             nn.Conv2d(12, 1, kernel_size=7, stride=1, padding=1),
             Interpolate(scale_factor=(2, 2), mode='nearest')
         )
@@ -97,6 +98,7 @@ class Prototype(nn.Module):
         # Reconstructs the binary road map
         self.road_map_reconstructor = nn.Sequential(
             InterpolatingDecoder(hidden_dim=hidden_dim),
+            nn.Dropout(0.5),
             nn.Conv2d(12, 1, kernel_size=7, stride=1, padding=1),
             Interpolate(scale_factor=(2, 2), mode='nearest')
         )
