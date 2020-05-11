@@ -87,7 +87,8 @@ print('==> Model Loaded. Begin Training')
 #
 
 criterion = model.module.loss_function
-optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
+optimizer_model = torch.optim.Adam(model.parameters())
+optimizer_seg = torch.optim.Adam(seg_model.parameters())
 
 model.train()
 seg_model.train()
@@ -100,7 +101,7 @@ if not skip_unlabeled_training:
 
         max_batches = len(unlabeled_trainloader)
         for idx, (images, camera_index) in enumerate(unlabeled_trainloader):
-            optimizer.zero_grad()
+            optimizer_model.zero_grad()
 
             images = images.to(device)
             reconstructions, mu, logvar = model(images, mode='single-image')
@@ -111,7 +112,8 @@ if not skip_unlabeled_training:
                                        kld_schedule=0.0015,
                                        i=i)
             loss.backward()
-            optimizer.step()
+            optimizer_model.step()
+            optimizer_seg.step()
 
             i += 1
 
@@ -142,7 +144,7 @@ for epoch in range(labeled_epochs):
 
     max_batches = len(labeled_trainloader)
     for idx, (images, targets, road_map) in enumerate(labeled_trainloader):
-        optimizer.zero_grad()
+        optimizer_model.zero_grad()
 
         # Format inputs
         images = torch.stack(images)
@@ -181,21 +183,22 @@ for epoch in range(labeled_epochs):
                                          i=i)
 
         # Backward through the road map head separately
-        road_loss.backward(retain_graph=True)
-        loss = obj_loss
+        seg_losses = seg_model(obj_recon, targets_seg)
+        seg_losses = seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']
+        loss = obj_loss + road_loss + seg_losses
 
-        # Start training the Segmentation Network after 1 Epoch
-        if epoch == 2:
-            model.module.freeze_backbone()
-            print('==> BACKBONE FROZEN')
-        if epoch > 1:
-            seg_losses = seg_model(obj_recon, targets_seg)
-            seg_losses = seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']
-            seg_losses.backward(retain_graph=True)
-            # loss += seg_losses
+        # # Start training the Segmentation Network after 1 Epoch
+        # if epoch == 2:
+        #     model.module.freeze_backbone()
+        #     print('==> BACKBONE FROZEN')
+        # if epoch > 1:
+        #     seg_losses = seg_model(obj_recon, targets_seg)
+        #     seg_losses = seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']
+        #     seg_losses.backward(retain_graph=True)
+        #     # loss += seg_losses
 
         loss.backward()
-        optimizer.step()
+        optimizer_model.step()
 
         i += 1
 
@@ -204,10 +207,6 @@ for epoch in range(labeled_epochs):
         # break
 
         if idx % 10 == 0:
-            if epoch > 1:
-                print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(), 'seg loss', seg_losses.item(),
-                      'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
-            else:
                 print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
                       'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
 
