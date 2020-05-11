@@ -18,7 +18,7 @@ class DenseTransformerLayer(nn.Module):
             https://arxiv.org/pdf/2003.13402.pdf
     """
 
-    def __init__(self, input_size=64, input_channels=256, bottleneck_channels=2,
+    def __init__(self, input_size=64, input_channels=256, bottleneck_channels=10,
                  bottleneck_size=1, output_depth=13):
         super().__init__()
         self.input_size = input_size
@@ -149,7 +149,7 @@ class MapReconstructor(nn.Module):
 
         self.decode = nn.Sequential(
             nn.ConvTranspose2d(input_channels, output_channels, kernel_size=3, stride=2),
-            nn.AdaptiveMaxPool2d((200, 200)),
+            # nn.AdaptiveMaxPool2d((200, 200)),
             self.activation,
             nn.ConvTranspose2d(output_channels, output_channels, kernel_size=3, stride=2),
             self.activation,
