@@ -13,7 +13,7 @@ from model.resnet_fpn import ResnetFPN, MapReconstructor
 output_path = '../fpn_weights/'
 
 unlabeled_batch_size = 32
-labeled_batch_size = 2
+labeled_batch_size = 4
 
 unlabeled_epochs = 10
 labeled_epochs = 30
@@ -47,6 +47,7 @@ road_decoder = MapReconstructor(10, output_channels=2)
 
 encoder = encoder.to(device)
 obj_decoder = obj_decoder.to(device)
+road_decoder = road_decoder.to(device)
 
 print('==> Device:', device)
 print('==> Batch Size:', unlabeled_batch_size)
@@ -83,17 +84,17 @@ for epoch in range(labeled_epochs):
         optimizer_decoder_road.zero_grad()
 
         # Format inputs
-        images = torch.stack(images)
+        images = torch.stack(images).float()
         images = images.to(device)
 
         # Rasterize bounding box images for reconstruction
-        obj_map = make_bounding_box_images(targets)
+        obj_map = make_bounding_box_images(targets).float()
         obj_map = obj_map.to(device)
 
         # Format road map
         road_map = torch.stack(road_map).float()
         road_map = [np.logical_not(road_map).float(), road_map]
-        road_map = torch.stack(road_map)
+        road_map = torch.stack(road_map).permute(1, 0, 2, 3)
         road_map = road_map.to(device)
 
         # Forward
@@ -106,13 +107,17 @@ for epoch in range(labeled_epochs):
         obj_map_recon = obj_map_recon.permute(0, 2, 3, 1)
         obj_map = obj_map.permute(0, 2, 3, 1)
         road_map = road_map.permute(0, 2, 3, 1)
+        
+        #print(road_map_recon.shape)
+        #print(road_map.shape)
+        #print(obj_map.shape)
+        #print(obj_map_recon.shape)
 
         # Losses
         loss_obj = criterion_obj(obj_map_recon, obj_map)
         loss_road = criterion_road(road_map_recon, road_map)
 
-        # loss = loss_obj + loss_road
-        loss = loss_obj
+        loss = loss_obj + loss_road
         loss.backward()
 
         optimizer_encoder.step()
@@ -124,6 +129,6 @@ for epoch in range(labeled_epochs):
         # Training Wheels
         # print('loss', loss.item())
         # break
-
-        print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
-              'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
+        if idx % 100 == 0:
+            print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
+                  'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))

@@ -55,11 +55,12 @@ class PyramidPoolingLayer(nn.Module):
 
         # Each level of the pyramid will have its own
         # Dense Transformer Layer
-        self.transformers = [DenseTransformerLayer(input_size=64),
-                             DenseTransformerLayer(input_size=32),
-                             DenseTransformerLayer(input_size=16),
-                             DenseTransformerLayer(input_size=8),
-                             DenseTransformerLayer(input_size=4)]
+        self.d0 = DenseTransformerLayer(input_size=64)
+        self.d1 = DenseTransformerLayer(input_size=32)
+        self.d2 = DenseTransformerLayer(input_size=16)
+        self.d3 = DenseTransformerLayer(input_size=8)
+        self.d4 = DenseTransformerLayer(input_size=4)
+        self.transformers = [self.d0, self.d1, self.d2, self.d3, self.d4]
 
     def forward(self, x):
         # Run all pyramids maps to discrete Dense
@@ -150,11 +151,17 @@ class MapReconstructor(nn.Module):
         self.decode = nn.Sequential(
             nn.ConvTranspose2d(input_channels, output_channels, kernel_size=3, stride=2),
             # nn.AdaptiveMaxPool2d((200, 200)),
+            nn.BatchNorm2d(output_channels),
             self.activation,
+            
             nn.ConvTranspose2d(output_channels, output_channels, kernel_size=3, stride=2),
+            nn.BatchNorm2d(output_channels),
             self.activation,
+            
             nn.ConvTranspose2d(output_channels, output_channels, kernel_size=3),
+            nn.BatchNorm2d(output_channels),
             self.activation,
+            
             nn.AdaptiveMaxPool2d(output_size),
             nn.Upsample(scale_factor=(scale, scale), mode='bilinear', align_corners=False)
         )
