@@ -51,6 +51,7 @@ class PyramidPoolingLayer(nn.Module):
         # self.feature_avg_conv = nn.Conv2d(pyramid_size * channels, channels, 1)
 
         self.max_pool = nn.AdaptiveMaxPool2d(output_size)
+        self.activation = nn.Tanh()
 
         # Each level of the pyramid will have its own
         # Dense Transformer Layer
@@ -82,7 +83,7 @@ class PyramidPoolingLayer(nn.Module):
         # Concat maps along depth dim
         maps = torch.cat(maps, dim=2)
 
-        return self.max_pool(maps)
+        return self.activation(self.max_pool(maps))
 
 
 class ResnetFPN(nn.Module):
@@ -133,3 +134,35 @@ class ResnetFPN(nn.Module):
 
         # Concat front and back
         return torch.cat([front, back], dim=2)
+
+    def infer(self, x):
+        with torch.no_grad:
+            self.eval()
+            return torch.sigmoid(self.forward(x))
+
+
+class MapReconstructor(nn.Module):
+    def __init__(self, input_channels, output_channels=1, output_size=(400, 400), scale=2):
+        super().__init__()
+
+        self.activation = nn.Tanh()
+
+        self.decode = nn.Sequential(
+            nn.ConvTranspose2d(input_channels, output_channels, kernel_size=3, stride=2),
+            nn.AdaptiveMaxPool2d((200, 200)),
+            self.activation,
+            nn.ConvTranspose2d(output_channels, output_channels, kernel_size=3, stride=2),
+            self.activation,
+            nn.ConvTranspose2d(output_channels, output_channels, kernel_size=3),
+            self.activation,
+            nn.AdaptiveMaxPool2d(output_size),
+            nn.Upsample(scale_factor=(scale, scale), mode='bilinear', align_corners=False)
+        )
+
+    def forward(self, x):
+        return self.decode(x)
+
+    def infer(self, x):
+        with torch.no_grad:
+            self.eval()
+            return torch.sigmoid(self.forward(x))
