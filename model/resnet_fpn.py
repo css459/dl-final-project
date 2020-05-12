@@ -19,7 +19,7 @@ class DenseTransformerLayer(nn.Module):
     """
 
     def __init__(self, input_size=64, input_channels=256, bottleneck_channels=10,
-                 bottleneck_size=1, output_depth=13):
+                 bottleneck_size=10, output_depth=13):
         super().__init__()
         self.input_size = input_size
         self.activation = nn.LeakyReLU(inplace=True)
@@ -137,7 +137,7 @@ class ResnetFPN(nn.Module):
         return torch.cat([front, back], dim=2)
 
     def infer(self, x):
-        with torch.no_grad:
+        with torch.no_grad():
             self.eval()
             return torch.sigmoid(self.forward(x))
 
@@ -149,19 +149,18 @@ class MapReconstructor(nn.Module):
         self.activation = nn.LeakyReLU(inplace=True)
 
         self.decode = nn.Sequential(
-            nn.ConvTranspose2d(input_channels, output_channels, kernel_size=3, stride=2),
-            # nn.AdaptiveMaxPool2d((200, 200)),
+            nn.ConvTranspose2d(input_channels, input_channels * 2, kernel_size=3, stride=2),
             nn.BatchNorm2d(output_channels),
             self.activation,
-            
-            nn.ConvTranspose2d(output_channels, output_channels, kernel_size=3, stride=2),
+
+            nn.ConvTranspose2d(input_channels * 2, input_channels, kernel_size=3, stride=2),
             nn.BatchNorm2d(output_channels),
             self.activation,
-            
-            nn.ConvTranspose2d(output_channels, output_channels, kernel_size=3),
+
+            nn.ConvTranspose2d(input_channels, output_channels, kernel_size=3),
             nn.BatchNorm2d(output_channels),
             self.activation,
-            
+
             nn.AdaptiveMaxPool2d(output_size),
             nn.Upsample(scale_factor=(scale, scale), mode='bilinear', align_corners=False)
         )
@@ -170,6 +169,6 @@ class MapReconstructor(nn.Module):
         return self.decode(x)
 
     def infer(self, x):
-        with torch.no_grad:
+        with torch.no_grad():
             self.eval()
             return torch.sigmoid(self.forward(x))

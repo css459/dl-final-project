@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.resnet import resnet18
@@ -25,5 +26,6 @@ class SegmentationNetwork(nn.Module):
     def infer(self, x):
         self.eval()
         self.segmentation_network.eval()
-        x = self.segmentation_network(x)
-        return convert_bounding_box_inference(x)
+        with torch.no_grad():
+            x = self.segmentation_network(x)
+            return convert_bounding_box_inference(x)
