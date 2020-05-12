@@ -41,7 +41,7 @@ def save(m, file_name):
 
 def load(m, file_name):
     file_path = os.path.join(output_path, file_name)
-    return m.load_state_dict(torch.load(file_path))
+    m.load_state_dict(torch.load(file_path, map_location=torch.device('cpu')))
 
 
 #
@@ -61,6 +61,8 @@ encoder = ResnetFPN()
 obj_decoder = MapReconstructor(10, output_channels=2)
 road_decoder = MapReconstructor(10, output_channels=2)
 seg_model = SegmentationNetwork()
+
+load(encoder, 'encoder-latest.torch')
 
 if torch.cuda.is_available():
     encoder = torch.nn.DataParallel(encoder)
