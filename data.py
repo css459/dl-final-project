@@ -198,3 +198,6 @@ def _convert_bounding_box_inference_helper(pred):
 
     return torch.DoubleTensor(new_boxes).to('cuda')  # HACK HACK HACK
 
+
+def horz_flip_tensor(imgs):
+    return [torch.from_numpy(np.flip(i.numpy(), 1).copy()) for i in imgs]

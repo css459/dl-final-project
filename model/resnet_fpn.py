@@ -51,7 +51,7 @@ class PyramidPoolingLayer(nn.Module):
         # self.feature_avg_conv = nn.Conv2d(pyramid_size * channels, channels, 1)
 
         self.max_pool = nn.AdaptiveMaxPool2d(output_size)
-        self.activation = nn.Tanh()
+        self.activation = nn.LeakyReLU(inplace=True)
 
         # Each level of the pyramid will have its own
         # Dense Transformer Layer
@@ -91,7 +91,7 @@ class ResnetFPN(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.resnet_id = 'resnet50'
+        self.resnet_id = 'resnet18'
         self.resnet_output_channels = 256
         self.resnet_pyramid_size = 5
         self.resnet_output_size = 64
@@ -146,7 +146,7 @@ class MapReconstructor(nn.Module):
     def __init__(self, input_channels, output_channels=1, output_size=(400, 400), scale=2):
         super().__init__()
 
-        self.activation = nn.Tanh()
+        self.activation = nn.LeakyReLU(inplace=True)
 
         self.decode = nn.Sequential(
             nn.ConvTranspose2d(input_channels, output_channels, kernel_size=3, stride=2),

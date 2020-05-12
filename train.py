@@ -1,9 +1,10 @@
+import os
 from time import perf_counter
 
 import numpy as np
 import torch
 
-from data import get_unlabeled_set, get_labeled_set, make_bounding_box_images
+from data import get_unlabeled_set, get_labeled_set, make_bounding_box_images, horz_flip_tensor
 from model.resnet_fpn import ResnetFPN, MapReconstructor
 
 #
@@ -22,11 +23,24 @@ labeled_epochs = 30
 # Setup
 #
 
-torch.backends.cudnn.benchmark = True
-
 if torch.cuda.is_available():
+    torch.backends.cudnn.benchmark = True
     unlabeled_batch_size *= torch.cuda.device_count()
     labeled_batch_size *= torch.cuda.device_count()
+
+
+def save(m, file_name):
+    file_path = os.path.join(output_path, file_name)
+    if torch.cuda.is_available():
+        torch.save(m.module.state_dict(), file_path)
+    else:
+        torch.save(m.state_dict(), file_path)
+
+
+def load(m, file_name):
+    file_path = os.path.join(output_path, file_name)
+    return m.load_state_dict(torch.load(file_path))
+
 
 #
 # Data
@@ -44,6 +58,13 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 encoder = ResnetFPN()
 obj_decoder = MapReconstructor(10, output_channels=2)
 road_decoder = MapReconstructor(10, output_channels=2)
+
+if torch.cuda.is_available():
+    encoder = torch.nn.DataParallel(encoder)
+    obj_decoder = torch.nn.DataParallel(obj_decoder)
+    road_decoder = torch.nn.DataParallel(road_decoder)
+    assert unlabeled_batch_size >= torch.cuda.device_count()
+    print('==> Using Data Parallel Devices:', torch.cuda.device_count())
 
 encoder = encoder.to(device)
 obj_decoder = obj_decoder.to(device)
@@ -84,7 +105,15 @@ for epoch in range(labeled_epochs):
         optimizer_decoder_road.zero_grad()
 
         # Format inputs
-        images = torch.stack(images).float()
+
+        # Flip the back images along their height,
+        # this makes more sense to orient the feature maps
+        images_fmt = []
+        for batch in images:
+            t = torch.stack(list(batch[:3]) + horz_flip_tensor(batch[-3:])).float()
+            images_fmt.append(t)
+
+        images = torch.stack(images_fmt)
         images = images.to(device)
 
         # Rasterize bounding box images for reconstruction
@@ -107,11 +136,6 @@ for epoch in range(labeled_epochs):
         obj_map_recon = obj_map_recon.permute(0, 2, 3, 1)
         obj_map = obj_map.permute(0, 2, 3, 1)
         road_map = road_map.permute(0, 2, 3, 1)
-        
-        #print(road_map_recon.shape)
-        #print(road_map.shape)
-        #print(obj_map.shape)
-        #print(obj_map_recon.shape)
 
         # Losses
         loss_obj = criterion_obj(obj_map_recon, obj_map)
@@ -130,5 +154,11 @@ for epoch in range(labeled_epochs):
         # print('loss', loss.item())
         # break
         if idx % 100 == 0:
-            print('[', epoch, '|', idx, '/', max_batches, ']', 'loss:', loss.item(),
-                  'curr time mins:', round(int(perf_counter() - start_time) / 60, 2))
+            print('[', epoch, '|\t', idx, '/', max_batches, ']', 'loss:', round(loss.item(), 4),
+                  '( obj:', round(loss_obj.item(), 4), 'road:', round(loss_road.item(), 4), ') '
+                                                                                            'curr time mins:',
+                  round(int(perf_counter() - start_time) / 60, 2))
+
+    save(encoder, 'encoder-latest.torch')
+    save(obj_decoder, 'obj-decoder-latest.torch')
+    save(road_decoder, 'road-decoder-latest.torch')
