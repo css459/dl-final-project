@@ -11,7 +11,7 @@ from model.resnet_fpn import ResnetFPN, MapReconstructor
 # Constants
 #
 
-output_path = '../fpn_weights/'
+output_path = '/scratch/css459/fpn_weights/'
 
 unlabeled_batch_size = 32
 labeled_batch_size = 4
