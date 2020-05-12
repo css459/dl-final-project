@@ -66,34 +66,6 @@ class VAE(nn.Module):
         self.fc2 = nn.Linear(h_dim, z_dim)
         self.fc3 = nn.Linear(z_dim, h_dim)
 
-        # self.decoder = nn.Sequential(
-        #     UnFlatten(),
-        #     Interpolate(scale_factor=(3, 3), mode='bilinear'),
-        #     nn.ConvTranspose2d(h_dim, 128, kernel_size=7, stride=1, padding=0),
-        #     nn.ReLU(),
-        #     Interpolate(scale_factor=(3, 3), mode='bilinear'),
-        #     nn.ConvTranspose2d(128, 64, kernel_size=5, stride=1, padding=1),
-        #     nn.ReLU(),
-        #     Interpolate(scale_factor=(3, 3), mode='bilinear'),
-        #     nn.ConvTranspose2d(64, 32, kernel_size=3, stride=1, padding=2),
-        #     nn.ReLU(),
-        #     Interpolate(scale_factor=(3, 3), mode='bilinear'),
-        #     nn.ConvTranspose2d(32, image_channels, kernel_size=3, stride=1, padding=1),
-        #     nn.Sigmoid(),
-        # )
-
-        # self.decoder = nn.Sequential(
-        #     UnFlatten(),
-        #     nn.ConvTranspose2d(h_dim, 128, kernel_size=(5, 5), stride=(1, 1)),
-        #     nn.ReLU(),
-        #     nn.ConvTranspose2d(128, 64, kernel_size=(5, 5), stride=(3, 3), padding=(1, 1), output_padding=(1, 1)),
-        #     nn.ReLU(),
-        #     nn.ConvTranspose2d(64, 32, kernel_size=(5, 5), stride=(4, 4), padding=(0, 1), output_padding=(0, 1)),
-        #     nn.ReLU(),
-        #     nn.ConvTranspose2d(32, image_channels, kernel_size=(5, 5), stride=(4, 5), padding=(1, 7)),
-        #     nn.Sigmoid(),
-        # )
-
         self.decoder = nn.Sequential(
             UnFlatten(),
             Interpolate(scale_factor=(4, 4), mode='bilinear'),

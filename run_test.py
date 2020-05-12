@@ -3,9 +3,9 @@ import random
 
 import numpy as np
 import torch
-from data_helper import LabeledDataset
 
-from helper import compute_ats_bounding_boxes, compute_ts_road_map
+from helpers.data_helper import LabeledDataset
+from helpers.helper import compute_ats_bounding_boxes, compute_ts_road_map
 from model_loader import get_transform_task1, get_transform_task2, ModelLoader
 
 torch.backends.cudnn.deterministic = True
