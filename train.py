@@ -19,7 +19,7 @@ unlabeled_batch_size = 32
 labeled_batch_size = 4
 
 unlabeled_epochs = 10
-labeled_epochs = 5
+labeled_epochs = 10
 
 #
 # Setup

@@ -15,7 +15,7 @@ from model.util import Flatten
 
 output_path = '/scratch/css459/fpn_weights/'
 
-unlabeled_epochs = 4
+unlabeled_epochs = 8
 unlabeled_batch_size = 8
 
 #
