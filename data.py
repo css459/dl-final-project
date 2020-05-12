@@ -49,7 +49,7 @@ def get_unlabeled_set(batch_size=3, format='image'):
 
     unlabeled_trainset = UnlabeledDataset(image_folder=IMAGE_FOLDER,
                                           scene_index=UNLABELED_SCENE_INDEX,
-                                          first_dim='image',
+                                          first_dim=format,
                                           transform=transform)
 
     unlabeled_trainloader = DataLoader(unlabeled_trainset,

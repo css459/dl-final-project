@@ -57,6 +57,7 @@ _, unlabeled_trainloader = get_unlabeled_set(batch_size=unlabeled_batch_size)
 #
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 encoder = ResnetFPN()
 obj_decoder = MapReconstructor(10, output_channels=2)
 road_decoder = MapReconstructor(10, output_channels=2)
@@ -113,6 +114,7 @@ for epoch in range(labeled_epochs):
         optimizer_encoder.zero_grad()
         optimizer_decoder_obj.zero_grad()
         optimizer_decoder_road.zero_grad()
+        optimizer_seg_model.zero_grad()
 
         # Format inputs
 
