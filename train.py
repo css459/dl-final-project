@@ -4,8 +4,10 @@ from time import perf_counter
 import numpy as np
 import torch
 
-from data import get_unlabeled_set, get_labeled_set, make_bounding_box_images, horz_flip_tensor
+from data import get_unlabeled_set, get_labeled_set, \
+    make_bounding_box_images, horz_flip_tensor, convert_bounding_box_targets
 from model.resnet_fpn import ResnetFPN, MapReconstructor
+from model.segmentation import SegmentationNetwork
 
 #
 # Constants
@@ -58,17 +60,21 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 encoder = ResnetFPN()
 obj_decoder = MapReconstructor(10, output_channels=2)
 road_decoder = MapReconstructor(10, output_channels=2)
+seg_model = SegmentationNetwork()
 
 if torch.cuda.is_available():
     encoder = torch.nn.DataParallel(encoder)
     obj_decoder = torch.nn.DataParallel(obj_decoder)
     road_decoder = torch.nn.DataParallel(road_decoder)
+    seg_model = torch.nn.DataParallel(seg_model)
+
     assert unlabeled_batch_size >= torch.cuda.device_count()
     print('==> Using Data Parallel Devices:', torch.cuda.device_count())
 
 encoder = encoder.to(device)
 obj_decoder = obj_decoder.to(device)
 road_decoder = road_decoder.to(device)
+seg_model = seg_model.to(device)
 
 print('==> Device:', device)
 print('==> Batch Size:', unlabeled_batch_size)
@@ -88,10 +94,12 @@ criterion_road = torch.nn.BCEWithLogitsLoss(pos_weight=road_weights)
 optimizer_encoder = torch.optim.Adam(encoder.parameters())
 optimizer_decoder_obj = torch.optim.Adam(obj_decoder.parameters())
 optimizer_decoder_road = torch.optim.Adam(road_decoder.parameters())
+optimizer_seg_model = torch.optim.Adam(seg_model.parameters())
 
 encoder.train()
 obj_decoder.train()
 road_decoder.train()
+seg_model.train()
 
 i = 0
 start_time = perf_counter()
@@ -126,10 +134,14 @@ for epoch in range(labeled_epochs):
         road_map = torch.stack(road_map).permute(1, 0, 2, 3)
         road_map = road_map.to(device)
 
+        # Make the targets for the Segmentation Network
+        targets_seg = convert_bounding_box_targets(targets, device)
+
         # Forward
         enc = encoder(images)
         road_map_recon = road_decoder(enc)
         obj_map_recon = obj_decoder(enc)
+        seg_losses = seg_model(torch.sigmoid(obj_map_recon[:, 1, :, :].view(-1, 1, 800, 800)), targets_seg)
 
         # Permute the dims for PyTorch BCELoss
         road_map_recon = road_map_recon.permute(0, 2, 3, 1)
@@ -140,13 +152,15 @@ for epoch in range(labeled_epochs):
         # Losses
         loss_obj = criterion_obj(obj_map_recon, obj_map)
         loss_road = criterion_road(road_map_recon, road_map)
+        loss_seg = seg_losses['loss_box_reg'] + seg_losses['loss_rpn_box_reg']
 
-        loss = loss_obj + loss_road
+        loss = loss_obj + loss_road + loss_seg
         loss.backward()
 
         optimizer_encoder.step()
         optimizer_decoder_road.step()
         optimizer_decoder_obj.step()
+        optimizer_seg_model.step()
 
         i += 1
 
@@ -154,11 +168,12 @@ for epoch in range(labeled_epochs):
         # print('loss', loss.item())
         # break
         if idx % 100 == 0:
-            print('[', epoch, '|\t', idx, '/', max_batches, ']', 'loss:', round(loss.item(), 4),
-                  '( obj:', round(loss_obj.item(), 4), 'road:', round(loss_road.item(), 4), ') '
-                                                                                            'curr time mins:',
+            print('[', epoch, '|', idx, '\t/', max_batches, ']', 'loss:', round(loss.item(), 4),
+                  '( obj:', round(loss_obj.item(), 4), 'road:', round(loss_road.item(), 4),
+                  'seg:', round(loss_seg.item(), 4), ') curr time mins:',
                   round(int(perf_counter() - start_time) / 60, 2))
 
     save(encoder, 'encoder-latest.torch')
     save(obj_decoder, 'obj-decoder-latest.torch')
     save(road_decoder, 'road-decoder-latest.torch')
+    save(seg_model, 'seg-latest.torch')
