@@ -15,7 +15,7 @@ from model.util import Flatten
 
 output_path = '/scratch/css459/fpn_weights/'
 
-unlabeled_epochs = 10
+unlabeled_epochs = 4
 unlabeled_batch_size = 8
 
 #
@@ -30,7 +30,7 @@ if torch.cuda.is_available():
 
 def save(m, file_name):
     file_path = os.path.join(output_path, file_name)
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
         torch.save(m.module.state_dict(), file_path)
     else:
         torch.save(m.state_dict(), file_path)

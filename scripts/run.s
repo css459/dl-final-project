@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=3:00:00
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:k80:1
+#SBATCH --gres=gpu:1
 #SBATCH --job-name=dl-final
 #SBATCH --mail-type=END
 #SBATCH --mail-user=css@nyu.edu

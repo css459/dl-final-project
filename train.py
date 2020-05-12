@@ -19,7 +19,7 @@ unlabeled_batch_size = 32
 labeled_batch_size = 4
 
 unlabeled_epochs = 10
-labeled_epochs = 30
+labeled_epochs = 5
 
 #
 # Setup
@@ -27,13 +27,14 @@ labeled_epochs = 30
 
 if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = True
-    unlabeled_batch_size *= torch.cuda.device_count()
-    labeled_batch_size *= torch.cuda.device_count()
+    if torch.cuda.device_count() > 1:
+        unlabeled_batch_size *= torch.cuda.device_count()
+        labeled_batch_size *= torch.cuda.device_count()
 
 
 def save(m, file_name):
     file_path = os.path.join(output_path, file_name)
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
         torch.save(m.module.state_dict(), file_path)
     else:
         torch.save(m.state_dict(), file_path)
@@ -63,9 +64,9 @@ obj_decoder = MapReconstructor(10, output_channels=2)
 road_decoder = MapReconstructor(10, output_channels=2)
 seg_model = SegmentationNetwork()
 
-load(encoder, 'encoder-latest.torch')
+load(encoder, 'encoder-pretext-latest.torch')
 
-if torch.cuda.is_available():
+if torch.cuda.is_available() and torch.cuda.device_count() > 1:
     encoder = torch.nn.DataParallel(encoder)
     obj_decoder = torch.nn.DataParallel(obj_decoder)
     road_decoder = torch.nn.DataParallel(road_decoder)
