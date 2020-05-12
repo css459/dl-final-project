@@ -18,5 +18,6 @@ module load  python3/intel/3.6.3
 module load cuda/9.2.88
 
 source $HOME/hpml/hpml-lab-4/src/py3.6.3/bin/activate
+srun python3 train-pretext.py
 srun python3 train.py
 
