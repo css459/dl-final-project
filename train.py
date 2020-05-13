@@ -90,8 +90,8 @@ print('==> Model Loaded. Begin Training')
 # Loss
 #
 
-class_weights = torch.FloatTensor([0.03, 0.97]).to(device)
-road_weights = torch.FloatTensor([0.3, 0.70]).to(device)
+class_weights = torch.FloatTensor([0.01, 0.99]).to(device)
+road_weights = torch.FloatTensor([0.1, 0.90]).to(device)
 criterion_obj = torch.nn.BCEWithLogitsLoss(pos_weight=class_weights)
 criterion_road = torch.nn.BCEWithLogitsLoss(pos_weight=road_weights)
 

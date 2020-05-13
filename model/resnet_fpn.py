@@ -91,7 +91,7 @@ class ResnetFPN(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.resnet_id = 'resnet18'
+        self.resnet_id = 'resnet50'
         self.resnet_output_channels = 256
         self.resnet_pyramid_size = 5
         self.resnet_output_size = 64
@@ -150,11 +150,11 @@ class MapReconstructor(nn.Module):
 
         self.decode = nn.Sequential(
             nn.ConvTranspose2d(input_channels, input_channels * 2, kernel_size=3, stride=2),
-            nn.BatchNorm2d(output_channels),
+            nn.BatchNorm2d(input_channels * 2),
             self.activation,
 
             nn.ConvTranspose2d(input_channels * 2, input_channels, kernel_size=3, stride=2),
-            nn.BatchNorm2d(output_channels),
+            nn.BatchNorm2d(input_channels),
             self.activation,
 
             nn.ConvTranspose2d(input_channels, output_channels, kernel_size=3),
